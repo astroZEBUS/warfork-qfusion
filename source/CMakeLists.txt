@@ -31,7 +31,7 @@ option(USE_SDL2 "Build using SDL2" OFF)
 option(GAME_MODULES_ONLY "Only build game modules" OFF)
 option(BUILD_STEAMLIB "Include the steamlib module (requires Steamworks SDK)" OFF)
 
-# We build angelscript and libRocket from source
+# We build angelscript, libRocket, and STB from source
 
 set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
 set(ANGELSCRIPT_INCLUDE_DIR ${ANGELSCRIPT_DIR}/include/)
@@ -40,6 +40,9 @@ add_subdirectory(${ANGELSCRIPT_DIR}/projects/cmake ${ANGELSCRIPT_DIR}/lib/)
 set(LIBROCKET_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/libRocket)
 set(LIBROCKET_INCLUDE_DIR ${LIBROCKET_DIR}/Include)
 set(LIBROCKET_SOURCE_DIR ${LIBROCKET_DIR}/Source)
+
+set(STB_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/stb)
+set(STB_INCLUDE_DIR ${STB_DIR})
 
 # Windows specific settings
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -50,9 +53,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     endif()
 
     set(CMAKE_INCLUDE_PATH
-		"../libsrcs/src/libogg"
-		"../libsrcs/src/libvorbis"
-		"../libsrcs/src/libtheora"
 		"../libsrcs/src/libcurl/include"
 		"../libsrcs/src/zlib"
 		"../libsrcs/src/libfreetype"
@@ -164,9 +164,6 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 endif()
 
 if (NOT GAME_MODULES_ONLY)
-    find_package(Ogg REQUIRED)
-    find_package(Vorbis REQUIRED)
-    find_package(Theora REQUIRED)
     find_package(CURL REQUIRED)
     find_package(ZLIB REQUIRED)
     find_package(Freetype REQUIRED)
@@ -204,9 +201,6 @@ if (NOT GAME_MODULES_ONLY)
     if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
         find_windows_release_libs(ZLIB_LIBRARY)
         find_windows_release_libs(FREETYPE_LIBRARIES)
-        find_windows_release_libs(OGG_LIBRARY)
-        find_windows_release_libs(VORBIS_LIBRARIES)
-        find_windows_release_libs(THEORA_LIBRARY)
         find_windows_release_libs(CURL_LIBRARY)
         find_windows_release_libs(ANGELSCRIPT_LIBRARY)
         find_windows_release_libs(SDL2_LIBRARIES)
@@ -216,15 +210,6 @@ endif()
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux") # Do not add 'OR MINGW' here - we need to use suffix-prefix settings from Windows
     set(CURL_LIBRARY "")
     add_definitions(-DLIBCURL_RUNTIME)
-
-    set(OGG_LIBRARY "")
-    add_definitions(-DOGGLIB_RUNTIME)
-
-    set(VORBIS_LIBRARIES "")
-    add_definitions(-DVORBISLIB_RUNTIME)
-
-    set(THEORA_LIBRARIES "")
-    add_definitions(-DTHEORALIB_RUNTIME)
 
     set(FREETYPE_LIBRARIES "")
     add_definitions(-DFREETYPELIB_RUNTIME)
