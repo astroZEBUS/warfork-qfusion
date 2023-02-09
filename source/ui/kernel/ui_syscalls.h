@@ -166,8 +166,8 @@ namespace trap
 			return UI_IMPORT.S_RegisterSound( name );
 		}
 
-		inline void S_StartLocalSound( const char *s ) {
-			UI_IMPORT.S_StartLocalSound( s );
+		inline void S_StartLocalSound( struct sfx_s *sfx, int channel, float fvol ) {
+			UI_IMPORT.S_StartLocalSound( sfx, channel, fvol );
 		}
 
 		inline void S_StartBackgroundTrack( const char *intro, const char *loop, int mode ) {

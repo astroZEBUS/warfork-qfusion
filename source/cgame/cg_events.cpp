@@ -153,7 +153,7 @@ void CG_LaserBeamEffect( centity_t *cent )
 				sound = CG_MediaSfx( cgs.media.sfxLasergunWeakStop );
 
 			if( ISVIEWERENTITY( cent->current.number ) )
-				trap_S_StartGlobalSound( sound, CHAN_AUTO, cg_volume_effects->value );
+				trap_S_StartLocalSound( sound, CHAN_AUTO, cg_volume_effects->value );
 			else
 				trap_S_StartRelativeSound( sound, cent->current.number, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 		}
@@ -359,7 +359,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode )
 	if( sound )
 	{
 		if( ISVIEWERENTITY( entNum ) )
-			trap_S_StartGlobalSound( sound, CHAN_MUZZLEFLASH, cg_volume_effects->value );
+			trap_S_StartLocalSound( sound, CHAN_MUZZLEFLASH, cg_volume_effects->value );
 		else
 			// fixed position is better for location, but the channels are used from worldspawn
 			// and openal runs out of channels quick on cheap cards. Relative sound uses per-entity channels.
@@ -369,7 +369,7 @@ static void CG_FireWeaponEvent( int entNum, int weapon, int fireMode )
 		{
 			struct sfx_s *quadSfx = CG_MediaSfx( cgs.media.sfxQuadFireSound );
 			if( ISVIEWERENTITY( entNum ) )
-				trap_S_StartGlobalSound( quadSfx, CHAN_AUTO, cg_volume_effects->value );
+				trap_S_StartLocalSound( quadSfx, CHAN_AUTO, cg_volume_effects->value );
 			else
 				trap_S_StartRelativeSound( quadSfx, entNum, CHAN_AUTO, cg_volume_effects->value, attenuation );
 		}
@@ -811,7 +811,7 @@ void CG_AddAnnouncerEvent( struct sfx_s *sound, bool queued )
 
 	if( !queued )
 	{
-		trap_S_StartGlobalSound( sound, CHAN_ANNOUNCER, cg_volume_announcer->value );
+		trap_S_StartLocalSound( sound, CHAN_ANNOUNCER, cg_volume_announcer->value );
 		cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
 		return;
 	}
@@ -844,7 +844,7 @@ void CG_ReleaseAnnouncerEvents( void )
 		sound = cg_announcerEvents[cg_announcerEventsCurrent & CG_MAX_ANNOUNCER_EVENTS_MASK].sound;
 		if( sound )
 		{
-			trap_S_StartGlobalSound( sound, CHAN_ANNOUNCER, cg_volume_announcer->value );
+			trap_S_StartLocalSound( sound, CHAN_ANNOUNCER, cg_volume_announcer->value );
 			cg_announcerEventsDelay = CG_ANNOUNCER_EVENTS_FRAMETIME; // wait
 		}
 		cg_announcerEventsCurrent++;
@@ -967,7 +967,7 @@ void CG_Event_Pain( entity_state_t *state, int parm )
 	if( parm == PAIN_WARSHELL )
 	{
 		if( ISVIEWERENTITY( state->number ) )
-			trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxShellHit ), CHAN_PAIN, 
+			trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxShellHit ), CHAN_PAIN, 
 				cg_volume_players->value );
 		else
 			trap_S_StartRelativeSound( CG_MediaSfx( cgs.media.sfxShellHit ), state->number, CHAN_PAIN, 
@@ -1115,7 +1115,7 @@ void CG_Event_WallJump( entity_state_t *state, int parm, int ev )
 	if( ev == EV_WALLJUMP_FAILED )
 	{
 		if( ISVIEWERENTITY( state->number ) )
-			trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxWalljumpFailed ), CHAN_BODY, 
+			trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxWalljumpFailed ), CHAN_BODY, 
 			cg_volume_effects->value );
 		else
 			trap_S_StartRelativeSound( CG_MediaSfx( cgs.media.sfxWalljumpFailed ), state->number, CHAN_BODY, cg_volume_effects->value, ATTN_NORM );
@@ -1300,7 +1300,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted )
 			cg.predictedWeaponSwitch = 0;
 
 		if( viewer )
-			trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponUp ), CHAN_AUTO, cg_volume_effects->value );
+			trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponUp ), CHAN_AUTO, cg_volume_effects->value );
 		else
 			trap_S_StartFixedSound( CG_MediaSfx( cgs.media.sfxWeaponUp ), ent->origin, CHAN_AUTO, cg_volume_effects->value, ATTN_NORM );
 		break;
@@ -1402,7 +1402,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted )
 
 	case EV_NOAMMOCLICK:
 		if( viewer )
-			trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponUpNoAmmo ), CHAN_ITEM, cg_volume_effects->value );
+			trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponUpNoAmmo ), CHAN_ITEM, cg_volume_effects->value );
 		else
 			trap_S_StartFixedSound( CG_MediaSfx( cgs.media.sfxWeaponUpNoAmmo ), ent->origin, CHAN_ITEM, cg_volume_effects->value, ATTN_IDLE );
 		break;
@@ -1546,7 +1546,7 @@ void CG_EntityEvent( entity_state_t *ent, int ev, int parm, bool predicted )
 
 		if( ISVIEWERENTITY( ent->ownerNum ) )
 		{
-			trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxPlayerRespawn ), CHAN_AUTO,
+			trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxPlayerRespawn ), CHAN_AUTO,
 				cg_volume_effects->value );
 		}
 		else
@@ -1769,12 +1769,12 @@ static void CG_FirePlayerStateEvents( void )
 				break;
 			if( parm < 4 )
 			{        // hit of some caliber
-				trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponHit[parm] ), CHAN_AUTO, cg_volume_hitsound->value );
+				trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponHit[parm] ), CHAN_AUTO, cg_volume_hitsound->value );
 				CG_ScreenCrosshairDamageUpdate();
 			}
 			else if( parm == 4 ) // killed an enemy
 			{
-				trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponKill ), CHAN_AUTO, cg_volume_hitsound->value );
+				trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponKill ), CHAN_AUTO, cg_volume_hitsound->value );
 				CG_ScreenCrosshairDamageUpdate();
 
 			if( cg_reactionKills->integer && !cg.view.thirdperson && !cgs.demoPlaying )
@@ -1811,7 +1811,7 @@ static void CG_FirePlayerStateEvents( void )
 			}
 			else
 			{ // hit a teammate
-				trap_S_StartGlobalSound( CG_MediaSfx( cgs.media.sfxWeaponHitTeam ), CHAN_AUTO, cg_volume_hitsound->value );
+				trap_S_StartLocalSound( CG_MediaSfx( cgs.media.sfxWeaponHitTeam ), CHAN_AUTO, cg_volume_hitsound->value );
 				if( cg_showhelp->integer )
 				{
 					if( random() <= 0.5f )
@@ -1892,7 +1892,7 @@ static void CG_FirePlayerStateEvents( void )
 
 		case PSEV_INDEXEDSOUND:
 			if( cgs.soundPrecache[parm] )
-				trap_S_StartGlobalSound( cgs.soundPrecache[parm], CHAN_AUTO, cg_volume_effects->value );
+				trap_S_StartLocalSound( cgs.soundPrecache[parm], CHAN_AUTO, cg_volume_effects->value );
 			break;
 
 		case PSEV_ANNOUNCER:
