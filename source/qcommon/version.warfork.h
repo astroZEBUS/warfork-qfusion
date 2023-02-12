@@ -165,3 +165,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef APP_STEAMID
 #define APP_STEAMID						671610
 #endif
+
+#ifndef DISCORD_APP_ID
+#define DISCORD_APP_ID					1074038981802598491
+#endif
