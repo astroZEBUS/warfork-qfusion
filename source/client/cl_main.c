@@ -2754,6 +2754,9 @@ void CL_Frame( int realmsec, int gamemsec )
 			CL_SoundModule_Update( vec3_origin, vec3_origin, axis_identity, NULL, false );
 	}
 
+    // update discord
+    CL_UpdateDiscord();
+    
 	// advance local effects for next frame
 	SCR_RunCinematic();
 	SCR_RunConsole( allRealMsec );
@@ -3114,6 +3117,7 @@ void CL_Init( void )
 
 	CL_InitMedia();
 
+    CL_InitDiscord();
 	CL_UIModule_ForceMenuOn();
 
 	// check for update
@@ -3164,6 +3168,7 @@ void CL_Shutdown( void )
 		cls.servername = NULL;
 	}
 
+    CL_ShutdownDiscord();
 	CL_UIModule_Shutdown();
 	CL_GameModule_Shutdown();
 	CL_SoundModule_Shutdown( true );

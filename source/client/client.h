@@ -361,6 +361,13 @@ extern entity_state_t cl_baselines[MAX_EDICTS];
 
 
 //
+// cl_discord.c
+//
+void CL_UpdateDiscord( void );
+void CL_InitDiscord( void );
+void CL_ShutdownDiscord( void );
+
+//
 // cl_cin.c
 //
 void SCR_InitCinematic( void );

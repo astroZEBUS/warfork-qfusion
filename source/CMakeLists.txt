@@ -41,6 +41,10 @@ set(LIBROCKET_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/libRocket)
 set(LIBROCKET_INCLUDE_DIR ${LIBROCKET_DIR}/Include)
 set(LIBROCKET_SOURCE_DIR ${LIBROCKET_DIR}/Source)
 
+set(DISCORD_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/discord)
+set(DISCORD_INCLUDE_DIR ${DISCORD_DIR}/include)
+set(DISCORD_SOURCE_DIR ${DISCORD_DIR}/src)
+
 set(STB_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/stb)
 set(STB_INCLUDE_DIR ${STB_DIR})
 
@@ -216,7 +220,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux") # Do not add 'OR MINGW' here - we need
 
     set(ZLIB_LIBRARY "")
     add_definitions(-DZLIB_RUNTIME)
-
+    
     set(CMAKE_EXECUTABLE_SUFFIX ".${CMAKE_SYSTEM_PROCESSOR}${CMAKE_EXECUTABLE_SUFFIX}")
     set(CMAKE_SHARED_LIBRARY_SUFFIX "_${CMAKE_SYSTEM_PROCESSOR}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 endif()
@@ -235,9 +239,9 @@ if (NOT GAME_MODULES_ONLY)
     add_subdirectory(cin)
     add_subdirectory(ftlib)
     add_subdirectory(ref_gl)
-	add_subdirectory(snd_openal)
-	add_subdirectory(snd_qf)
-	add_subdirectory(ui)
+    add_subdirectory(snd_openal)
+    add_subdirectory(snd_qf)
+    add_subdirectory(ui)
     if (BUILD_STEAMLIB)
         add_subdirectory(steamlib)
     endif()
