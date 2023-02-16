@@ -177,7 +177,7 @@ void CL_UpdateDiscord(void) {
 			if (cl_discord_state.status != DISCORD_ACTIVE) {
 				needs_update = true;
 
-                const char *valid_maps[] = { "[wfamphi1]", "[wfbomb1]", "[wfbomb2]", "[wfbomb3]", "[wfbomb4]", "[wfbomb5]", "[wfbomb6]", "[wfca1]", "[wfca2]", "[wfctf1]", "[wfctf2]", "[wfctf3]", "[wfctf4]", "[wfctf5]", "[wfctf6]", "[wfda1]", "[wfda2]", "[wfda3]", "[wfda4]", "[wfda5]", "[wfdm1]", "[wfdm10]", "[wfdm11]", "[wfdm12]", "[wfdm13]", "[wfdm14]", "[wfdm15]", "[wfdm16]", "[wfdm17]", "[wfdm18]", "[wfdm19]", "[wfdm2]", "[wfdm20]", "[wfdm3]", "[wfdm4]", "[wfdm5]", "[wfdm6]", "[wfdm7]", "[wfdm8]", "[wfdm9]", "[wfrace1]", "[wftutorial1]" };
+                const char *valid_maps[] = { "wfamphi1", "wfbomb1", "wfbomb2", "wfbomb3", "wfbomb4", "wfbomb5", "wfbomb6", "wfca1", "wfca2", "wfctf1", "wfctf2", "wfctf3", "wfctf4", "wfctf5", "wfctf6", "wfda1", "wfda2", "wfda3", "wfda4", "wfda5", "wfdm1", "wfdm10", "wfdm11", "wfdm12", "wfdm13", "wfdm14", "wfdm15", "wfdm16", "wfdm17", "wfdm18", "wfdm19", "wfdm2", "wfdm20", "wfdm3", "wfdm4", "wfdm5", "wfdm6", "wfdm7", "wfdm8", "wfdm9", "wfrace1", "wftutorial1" };
                 const size_t num_valid_maps = sizeof( valid_maps ) / sizeof( valid_maps[0] );
                 const char *mapname = cl.configstrings[CS_MAPNAME];
                 bool valid_map = false;
@@ -195,6 +195,7 @@ void CL_UpdateDiscord(void) {
 				Q_snprintfz(details, sizeof(details), "%s - %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MAPNAME]);
 				presence.details = details;
 
+				// If server is not localhost
 				if (cls.servertype != SOCKET_LOOPBACK) {
 
 					presence.partyId = cls.servername; 
@@ -235,7 +236,7 @@ void CL_UpdateDiscord(void) {
 */
 static void CL_DiscordJoinGame(const char *secret) {
 
-	if (strncasecmp(secret, "JOIN_", 5)) { // g_ascii_strncasecmp 
+	if (strncasecmp(secret, "JOIN_", 5)) {
 		Com_Printf(S_COLOR_YELLOW "Invalid invitation\n");
 		return;
 	}
