@@ -173,7 +173,7 @@ void CL_UpdateDiscord(void) {
 		char joinSecret[128];
 		char spectateSecret[128];
 
-		if (cls.state == CA_CONNECTED) {
+		if (cls.state >= CA_CONNECTED) {
 			if (cl_discord_state.status != DISCORD_ACTIVE) {
 				needs_update = true;
 
@@ -236,11 +236,6 @@ void CL_UpdateDiscord(void) {
 */
 static void CL_DiscordJoinGame(const char *secret) {
 
-	if (strncasecmp(secret, "JOIN_", 5)) {
-		Com_Printf(S_COLOR_YELLOW "Invalid invitation\n");
-		return;
-	}
-
 }
 
 /*
@@ -256,11 +251,6 @@ static void CL_DiscordJoinRequest(const DiscordUser *request) {
 * CL_DiscordSpectateGame
 */
 static void CL_DiscordSpectateGame(const char *secret) {
-
-	if (strncasecmp(secret, "SPCT_", 5)) {
-		Com_Printf(S_COLOR_YELLOW "Invalid invitation\n");
-		return;
-	}
 
 }
 

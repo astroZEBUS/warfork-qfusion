@@ -31,7 +31,7 @@ option(USE_SDL2 "Build using SDL2" OFF)
 option(GAME_MODULES_ONLY "Only build game modules" OFF)
 option(BUILD_STEAMLIB "Include the steamlib module (requires Steamworks SDK)" OFF)
 
-# We build angelscript, libRocket, and STB from source
+# We compile third-party libs from source
 
 set(ANGELSCRIPT_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/angelscript/sdk/angelscript)
 set(ANGELSCRIPT_INCLUDE_DIR ${ANGELSCRIPT_DIR}/include/)
@@ -42,8 +42,7 @@ set(LIBROCKET_INCLUDE_DIR ${LIBROCKET_DIR}/Include)
 set(LIBROCKET_SOURCE_DIR ${LIBROCKET_DIR}/Source)
 
 set(DISCORD_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/discord)
-set(DISCORD_INCLUDE_DIR ${DISCORD_DIR}/include)
-set(DISCORD_SOURCE_DIR ${DISCORD_DIR}/src)
+set(DISCORD_INCLUDE_DIR ${DISCORD_DIR})
 
 set(STB_DIR ${CMAKE_HOME_DIRECTORY}/../third-party/stb)
 set(STB_INCLUDE_DIR ${STB_DIR})

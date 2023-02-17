@@ -30,6 +30,7 @@ file(GLOB CLIENT_HEADERS
 	"../steamlib/steamlib_public.h"
 	"../cin/cin_public.h"
 	"../matchmaker/*.h"
+	"${DISCORD_INCLUDE_DIR}/*.h"
 )
 
 file(GLOB CLIENT_COMMON_SOURCES
@@ -39,8 +40,11 @@ file(GLOB CLIENT_COMMON_SOURCES
     "../gameshared/q_*.c"
     "../qalgo/*.c"
     "../matchmaker/*.c"
+	"${DISCORD_INCLUDE_DIR}/discord_rpc.cpp"	    
+	"${DISCORD_INCLUDE_DIR}/rpc_connection.cpp"
+	"${DISCORD_INCLUDE_DIR}/serialization.cpp"	    
 )
-
+    
 if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	file(GLOB CLIENT_PLATFORM_HEADERS
 		"../win32/resource.h"
@@ -68,6 +72,9 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
             "../sdl/sdl_client.c"
 
             "../win32/qfusion.rc"
+            
+            "${DISCORD_INCLUDE_DIR}/connection_win.cpp"	    
+            "${DISCORD_INCLUDE_DIR}/discord_register_win.cpp"
         )
 
         set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} ${SDL2MAIN_LIBRARY} "ws2_32.lib" "winmm.lib")
@@ -89,6 +96,9 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
             "../win32/conproc.c"
 
             "../win32/qfusion.rc"
+            
+            "${DISCORD_INCLUDE_DIR}/connection_win.cpp"	    
+            "${DISCORD_INCLUDE_DIR}/discord_register_win.cpp"
         )
 
         set(CLIENT_PLATFORM_LIBRARIES "ws2_32.lib" "winmm.lib")
@@ -120,6 +130,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
         "../sdl/sdl_client.c"
 
         "../mac/mac_sys.m"
+        
+        "${DISCORD_INCLUDE_DIR}/connection_unix.cpp"	    
+        "${DISCORD_INCLUDE_DIR}/discord_register_osx.cpp"
+	        
         "${QFUSION_MAC_INFO_PLIST}"
     )
 
@@ -158,6 +172,9 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
             "../sdl/sdl_time.c"
             "../sdl/sdl_lib.c"
             "../sdl/sdl_client.c"
+
+        	"${DISCORD_INCLUDE_DIR}/connection_unix.cpp"	    
+            "${DISCORD_INCLUDE_DIR}/discord_register_linux.cpp"	
         )
 
         set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} "pthread" "m" "dl" "rt")
@@ -179,6 +196,9 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
             "../unix/unix_vid.c"
 
             "../sdl/sdl_input_joy.c"
+
+	        "${DISCORD_INCLUDE_DIR}/connection_unix.cpp"	    
+	        "${DISCORD_INCLUDE_DIR}/discord_register_linux.cpp"	
         )
     
         set(CLIENT_PLATFORM_LIBRARIES ${SDL2_LIBRARY} "pthread" "dl" "m" "X11" "Xi" "Xext" "Xrandr" "rt")
