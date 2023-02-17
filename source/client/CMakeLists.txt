@@ -132,7 +132,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
         "../mac/mac_sys.m"
         
         "${DISCORD_INCLUDE_DIR}/connection_unix.cpp"	    
-        "${DISCORD_INCLUDE_DIR}/discord_register_osx.cpp"
+        "${DISCORD_INCLUDE_DIR}/discord_register_osx.m"
 	        
         "${QFUSION_MAC_INFO_PLIST}"
     )
