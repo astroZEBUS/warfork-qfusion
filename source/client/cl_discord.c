@@ -166,7 +166,7 @@ static void CL_DiscordReady(const DiscordUser *user) {
 void CL_UpdateDiscord(void) {
 
 	if( cl_discord_state.initialized ) {
-		if( cl_discord_state.last_update <= cls.realtime + 15000 ) // discord rate limits to 15s { 
+		if( cl_discord_state.last_update <= cls.realtime + 15000 ) { 
 			cl_discord_state.last_update = cls.realtime;
 
 			DiscordRichPresence presence = { 0 };
