@@ -146,7 +146,7 @@ typedef enum {
 
 typedef struct {
 	_Bool initialized;
-	unsigned int last_update;
+	unsigned int next_update;
 } cl_discord_state_t;
 
 static cl_discord_state_t cl_discord_state;
@@ -165,9 +165,12 @@ static void CL_DiscordReady(const DiscordUser *user) {
 
 void CL_UpdateDiscord(void) {
 
+  unsigned int now = Sys_Milliseconds();
 	if( cl_discord_state.initialized ) {
-		if( cl_discord_state.last_update <= cls.realtime + 15000 ) { 
-			cl_discord_state.last_update = cls.realtime;
+		if( cl_discord_state.next_update <= now ) {
+			cl_discord_state.next_update = now + 5000;
+
+			Com_Printf( "bombs away" );
 
 			DiscordRichPresence presence = { 0 };
 
