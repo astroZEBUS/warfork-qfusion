@@ -166,7 +166,7 @@ static void CL_DiscordReady(const DiscordUser *user) {
 void CL_UpdateDiscord(void) {
 
 	if( cl_discord_state.initialized ) {
-		if( cl_discord_state.last_update <= cls.realtime + 1000 ) {
+		if( cl_discord_state.last_update <= cls.realtime + 15000 ) // discord rate limits to 15s { 
 			cl_discord_state.last_update = cls.realtime;
 
 			DiscordRichPresence presence = { 0 };
@@ -206,7 +206,6 @@ void CL_UpdateDiscord(void) {
 
 				presence.partySize = cl.snapShots[cl.currentSnapNum & UPDATE_MASK].numplayers;
 				presence.partyMax = atoi(cl.configstrings[CS_MAXCLIENTS]);
-				cl_discord_state.status = DISCORD_ACTIVE;
 				presence.instance = true;
 			} else {
 				presence.largeImageKey = "mainmenu";
