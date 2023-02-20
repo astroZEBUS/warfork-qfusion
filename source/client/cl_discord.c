@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "client.h"
+#include "../gameshared/gs_public.h"
 
 #include "discord_register.h"
 #include "discord_rpc.h"
@@ -160,17 +161,36 @@ static void CL_DiscordReady(const DiscordUser *user) {
 }
 
 /*
+ * CL_PlayerStatus
+ */
+
+static const char *CL_PlayerStatus( void )
+{
+	if( cls.demo.playing ) {
+		return va( "demo" );
+	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
+		return va( "spectating" );
+	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_WARMUP ) {
+		return va( "warmup" ); // Only applicable if you're playing.
+	}  else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) {
+		return va( "timeout" ); // Only applicable if you're playing.
+	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_POSTMATCH ) {
+		return va( "gameover" ); // Only applicable if you're playing.
+	} else
+		return va( "playing" );
+}
+
+/*
 * CL_UpdateDiscord
 */
-
 void CL_UpdateDiscord(void) {
 
   unsigned int now = Sys_Milliseconds();
 	if( cl_discord_state.initialized ) {
 		if( cl_discord_state.next_update <= now ) {
-			cl_discord_state.next_update = now + 5000;
-
-			Com_Printf( "bombs away" );
+			
+			// Discord rate limit is 15s, but this has been tested and is fine!
+			cl_discord_state.next_update = now + 1000;
 
 			DiscordRichPresence presence = { 0 };
 
@@ -179,7 +199,7 @@ void CL_UpdateDiscord(void) {
 			char spectateSecret[128];
 
 			if (cls.state >= CA_CONNECTED) {
-				const char *valid_maps[] = { "13vast", "36dm2_b1", "36dm4", "36dm5", "3hours", "3v11", "3v11_b4", "50u1ca1", "50u1ca100", "50u1ca101", "abandoned", "acid3dm10", "acid3dm5", "acid3dm7", "acid3dm9", "acidwctf2", "acidwdm11", "acidwdm2", "acidwdm6", "actdm1", "ae", "aerorun", "air_sac_", "air-nasa", "airfun", "alley", "alley_cr", "antistat", "aow_fragland_b7", "aow-fragland_b5", "aow-fragland_b7-1", "army", "auh3dm1", "b1601763810", "baby_wca1", "billyhill", "blood_covenant", "boot_camp_b3", "btmid1_004", "btmid1_004_i", "btmid2_002", "btmid2_002_i", "btmid4_001", "btmid4_001_i", "cal_ca1", "cal_da1", "cal_da3", "capturecity_coder", "carbon", "ccdm1-tekktonic", "chiropteradm", "chronic_coder", "cht2", "claustrophobia", "cocaine_b1", "coldwarctf", "criziswdm3", "ct3dm4", "ct3tourney2", "ctctf6", "ctf_kothet", "ctf_kothet_cc", "cunete", "cure", "cwbomb1", "cwctf1", "cwl1", "cwl2", "cwl3", "cwl4", "cwl5", "cwm1", "cwm2", "cwm3", "cwm4", "cwm5", "cwm6", "cwm7", "cwrace1", "cwrace2", "cwrace3", "cwrace4", "cwrace5", "cws1", "cws2", "cxbomb2b", "d3xf1", "darkbomb1", "darkcity_coder", "de06", "debonaire", "decompression", "decompression00", "decompression01", "dm_etages_b", "downtown", "duel_boogyvan", "emctf1", "emsummer", "emtown", "emwarehouse", "etramphi", "etramphi2", "etramphi3", "face", "factory_beta", "feros", "fi_ctf1m", "focal_p132", "fr3dm1", "fragcity_coder", "furiousheights", "giantshome", "goldleaf", "gork", "gwsw3aprefinal", "haduca_1", "hesus_ra", "hylith_ctc1_b5", "icepart2", "ictfmoar", "ik3dm2", "industrial", "instactf1", "instactf1-x", "ionicsslidehouse", "jerms_beta1", "jerms_ca1", "jerms_ca2", "jerms_ca3", "jerms_ca4", "jerms_ctf2", "jerms_da1", "jerms_da2", "jerms_da4", "jerms_da5_1", "jerms_da5_2", "jerms_da5_3", "jerms_ica1", "jihras", "jof3dm2", "josher_b1", "kikimid_b1", "lawbomb1b3", "lawbombb2", "lazurab1", "lg", "lltdm1v2", "lltdm1v350", "lolface", "losthope", "lsdm1", "lulz", "lun3_20b1", "lun3dm5", "mainmenu", "malicious", "midair_b3", "midair_b5", "midair_b6", "moddm17", "motoville", "mxl_school", "necro6", "nodm14", "outpost", "outpost-rf", "overkill", "ozbomb", "partdm1", "paswdm1", "paswdm1_b2", "paswdm1_b2_sounds", "plduel2", "pro-ct3tourney2", "psl_koth", "psl_koth_cc", "pukka3tourney3", "pukka3tourney7", "qfraggel3ffa", "qfraggel3tdm", "rab3_duel1_v1", "rab3dm1", "rab3dm1_b1", "rats_waitingroom", "reactors", "reactors_2", "reqbath", "reqkitchen", "retard2", "rota3ctf1", "rota3ctf2", "rustgrad", "scduel1a3", "seasoned", "sf-xmas08", "sfkoth1_b1", "shepas", "shibam", "shiz_q1dm2", "simpsons_q3", "sinister", "sinjage_", "skyscrapers", "slide_air_b1", "slide_air_b2", "slide_arena_v3", "slide_baby_v7", "slide_bipbeta_dirty", "slide_flat", "slide_flat_v2", "slide_flat_v3", "slide_nyan_b1", "slide_nyan_b4", "slide_nyan_b6", "slide_tortus_b1", "slidehouse", "slidehouse_lava", "slidehouse_lava_b1", "slidehouse_lava_lol", "sohca1", "sokar3dm5", "sparth", "speedyctf", "stormsector7_alpha3", "summerbeta", "surv_pneumo_pyramide_v4", "svartholma", "t3ch", "theedged", "tlebomb1", "tlebomb1a", "tlebomb2", "torn", "tournw1", "trespass", "undergroundb2", "unitooldm6", "unknownmap", "wca1xmas", "wcai", "wctc1_b2", "wctc2", "wfa1insta", "wfamphi1", "wfbomb1", "wfbomb2", "wfbomb3", "wfbomb4", "wfbomb5", "wfbomb6", "wfca1", "wfca2", "wfctf1", "wfctf2", "wfctf3", "wfctf4", "wfctf5", "wfctf6", "wfda1", "wfda2", "wfda3", "wfda4", "wfda5", "wfdm1", "wfdm10", "wfdm11", "wfdm12", "wfdm13", "wfdm14", "wfdm15", "wfdm16", "wfdm17", "wfdm18", "wfdm19", "wfdm2", "wfdm20", "wfdm3", "wfdm4", "wfdm5", "wfdm6", "wfdm7", "wfdm8", "wfdm9", "wfrace1", "wftutorial1", "white_light", "wsw00021", "wsw00049", "wtdm-gr3nd3lk33p", "xfdm2", "xmas_river", "ztn2dm2", "ztn2dm3", "zxymid1" };
+				const char *valid_maps[] = { "13vast", "36dm2_b1", "36dm4", "36dm5", "3hours", "3v11", "3v11_b4", "50u1ca1", "50u1ca100", "50u1ca101", "abandoned", "acid3dm10", "acid3dm5", "acid3dm7", "acid3dm9", "acidwctf2", "acidwdm11", "acidwdm2", "acidwdm6", "actdm1", "ae", "aerorun", "air_sac_", "air-nasa", "airfun", "alley", "alley_cr", "antistat", "aow_fragland_b7", "aow-fragland_b5", "aow-fragland_b7-1", "army", "auh3dm1", "b1601763810", "baby_wca1", "billyhill", "blood_covenant", "boot_camp_b3", "btmid1_004", "btmid1_004_i", "btmid2_002", "btmid2_002_i", "btmid4_001", "btmid4_001_i", "cal_ca1", "cal_da1", "cal_da3", "capturecity_coder", "carbon", "ccdm1-tekktonic", "chiropteradm", "chronic_coder", "cht2", "claustrophobia", "cocaine_b1", "coldwarctf", "criziswdm3", "ct3dm4", "ct3tourney2", "ctctf6", "ctf_kothet", "ctf_kothet_cc", "cunete", "cure", "cwbomb1", "cwctf1", "cwl1", "cwl2", "cwl3", "cwl4", "cwl5", "cwm1", "cwm2", "cwm3", "cwm4", "cwm5", "cwm6", "cwm7", "cwrace1", "cwrace2", "cwrace3", "cwrace4", "cwrace5", "cws1", "cws2", "cxbomb2b", "d3xf1", "darkbomb1", "darkcity_coder", "de06", "debonaire", "decompression", "decompression00", "decompression01", "dm_etages_b", "downtown", "duel_boogyvan", "emctf1", "emsummer", "emtown", "emwarehouse", "etramphi", "etramphi2", "etramphi3", "face", "factory_beta", "feros", "fi_ctf1m", "focal_p132", "fr3dm1", "fragcity_coder", "furiousheights", "giantshome", "goldleaf", "gork", "gwsw3aprefinal", "haduca_1", "hesus_ra", "hylith_ctc1_b5", "icepart2", "ictfmoar", "ik3dm2", "industrial", "instactf1", "instactf1-x", "ionicsslidehouse", "jerms_beta1", "jerms_ca1", "jerms_ca2", "jerms_ca3", "jerms_ca4", "jerms_ctf2", "jerms_da1", "jerms_da2", "jerms_da4", "jerms_da5_1", "jerms_da5_2", "jerms_da5_3", "jerms_ica1", "jihras", "jof3dm2", "josher_b1", "kikimid_b1", "lawbomb1b3", "lawbombb2", "lazurab1", "lg", "lltdm1v2", "lltdm1v350", "lolface", "losthope", "lsdm1", "lulz", "lun3_20b1", "lun3dm5", "mainmenu", "malicious", "midair_b3", "midair_b5", "midair_b6", "moddm17", "motoville", "mxl_school", "necro6", "nodm14", "outpost", "outpost-rf", "overkill", "ozbomb", "partdm1", "paswdm1", "paswdm1_b2", "paswdm1_b2_sounds", "plduel2", "pro-ct3tourney2", "psl_koth", "psl_koth_cc", "pukka3tourney3", "pukka3tourney7", "qfraggel3ffa", "qfraggel3tdm", "rab3_duel1_v1", "rab3dm1", "rab3dm1_b1", "rats_waitingroom", "reactors", "reactors_2", "reqbath", "reqkitchen", "retard2", "rota3ctf1", "rota3ctf2", "rustgrad", "scduel1a3", "seasoned", "sf-xmas08", "sfkoth1_b1", "shepas", "shibam", "shiz_q1dm2", "sinister", "sinjage_", "skyscrapers", "slide_air_b1", "slide_air_b2", "slide_arena_v3", "slide_baby_v7", "slide_bipbeta_dirty", "slide_flat", "slide_flat_v2", "slide_flat_v3", "slide_nyan_b1", "slide_nyan_b4", "slide_nyan_b6", "slide_tortus_b1", "slidehouse", "slidehouse_lava", "slidehouse_lava_b1", "slidehouse_lava_lol", "sohca1", "sokar3dm5", "sparth", "speedyctf", "stormsector7_alpha3", "summerbeta", "surv_pneumo_pyramide_v4", "svartholma", "t3ch", "theedged", "tlebomb1", "tlebomb1a", "tlebomb2", "torn", "tournw1", "trespass", "undergroundb2", "unitooldm6", "unknownmap", "wca1xmas", "wca3", "wcai", "wctc1_b2", "wctc2", "wfa1insta", "wfamphi1", "wfbomb1", "wfbomb2", "wfbomb3", "wfbomb4", "wfbomb5", "wfbomb6", "wfca1", "wfca2", "wfctf1", "wfctf2", "wfctf3", "wfctf4", "wfctf5", "wfctf6", "wfda1", "wfda2", "wfda3", "wfda4", "wfda5", "wfdm1", "wfdm10", "wfdm11", "wfdm12", "wfdm13", "wfdm14", "wfdm15", "wfdm16", "wfdm17", "wfdm18", "wfdm19", "wfdm2", "wfdm20", "wfdm3", "wfdm4", "wfdm5", "wfdm6", "wfdm7", "wfdm8", "wfdm9", "wfrace1", "wftutorial1", "white_light", "wsw00021", "wsw00049", "wtdm-gr3nd3lk33p", "xfdm2", "xmas_river", "ztn2dm2", "ztn2dm3", "zxymid1" };
 				const size_t num_valid_maps = sizeof( valid_maps ) / sizeof( valid_maps[0] );
 				const char *mapname = cl.configstrings[CS_MAPNAME];
 				bool valid_map = false;
@@ -189,16 +209,19 @@ void CL_UpdateDiscord(void) {
 						break;
 					}
 				}
-
-				presence.largeImageKey = valid_map ? mapname : "unknownmap";
-				presence.state = "Playing";
-
-				Q_snprintfz(details, sizeof(details), "%s - %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MAPNAME]);
-				presence.details = details;
+				
+				presence.largeImageKey = valid_map ? mapname : "unknownmap"; // Levelshot
+				presence.largeImageText = cl.configstrings[CS_HOSTNAME]; // Server name
+				presence.smallImageKey = CL_PlayerStatus();
+				presence.smallImageText = CL_PlayerStatus();
+				presence.state = valid_map ? mapname : "unknownmap"; // Map name
+				// presence.endTimestamp = gs.MatchDuration // Round end time
+				Q_snprintfz( details, sizeof( details ), "%s %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MATCHSCORE] );
+				presence.details = details; // Gametype and Score (if available)
 
 				// If server is not localhost
 				if (cls.servertype != SOCKET_LOOPBACK) {
-					presence.partyId = cls.servername; 
+					presence.partyId = cls.servername;
 
 					Q_snprintfz(joinSecret, sizeof(joinSecret), "JOIN_%s", presence.partyId);
 					presence.joinSecret = joinSecret;
@@ -207,8 +230,8 @@ void CL_UpdateDiscord(void) {
 					presence.spectateSecret = spectateSecret;
 				}
 
-				presence.partySize = cl.snapShots[cl.currentSnapNum & UPDATE_MASK].numplayers;
-				presence.partyMax = atoi(cl.configstrings[CS_MAXCLIENTS]);
+				presence.partySize = cl.snapShots[cl.currentSnapNum & UPDATE_MASK].numplayers; // Total clients connected
+				presence.partyMax = atoi(cl.configstrings[CS_MAXCLIENTS]); // Max clients
 				presence.instance = true;
 			} else {
 				presence.largeImageKey = "mainmenu";
