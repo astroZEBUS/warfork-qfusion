@@ -26,9 +26,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "discord_register.h"
 #include "discord_rpc.h"
 
-#define DISCORD_APP_ID				1074038981802598491
-#define G_STRINGIFY(macro_or_string)	G_STRINGIFY_ARG (macro_or_string)
-#define	G_STRINGIFY_ARG(contents)	#contents
+#define DISCORD_APP_ID 1074038981802598491
+#define G_STRINGIFY( macro_or_string ) G_STRINGIFY_ARG( macro_or_string )
+#define G_STRINGIFY_ARG( contents ) #contents
 
 enum EDiscordResult {
 	DiscordResult_Ok,
@@ -78,72 +78,113 @@ enum EDiscordResult {
 };
 
 /*
-* CL_DiscordErrorString
-*/
-static const char *CL_DiscordErrorString(enum EDiscordResult result) {
-
-	switch (result) {
-		case DiscordResult_Ok: return "Ok";
-		case DiscordResult_ServiceUnavailable: return "Service Unavailable";
-		case DiscordResult_InvalidVersion: return "Invalid Version";
-		case DiscordResult_LockFailed: return "Lock Failed";
-		case DiscordResult_InternalError: return "Internal Error";
-		case DiscordResult_InvalidPayload: return "Invalid Payload";
-		case DiscordResult_InvalidCommand: return "Invalid Command";
-		case DiscordResult_InvalidPermissions: return "Invalid Permissions";
-		case DiscordResult_NotFetched: return "Not Fetched";
-		case DiscordResult_NotFound: return "Not Found";
-		case DiscordResult_Conflict: return "Conflict";
-		case DiscordResult_InvalidSecret: return "Invalid Secret";
-		case DiscordResult_InvalidJoinSecret: return "Invalid Join Secret";
-		case DiscordResult_NoEligibleActivity: return "No Eligible Activity";
-		case DiscordResult_InvalidInvite: return "Invalid Invite";
-		case DiscordResult_NotAuthenticated: return "Not Authenticated";
-		case DiscordResult_InvalidAccessToken: return "Invalid Access Token";
-		case DiscordResult_ApplicationMismatch: return "Application Mismatch";
-		case DiscordResult_InvalidDataUrl: return "Invalid Data Url";
-		case DiscordResult_InvalidBase64: return "Invalid Base64";
-		case DiscordResult_NotFiltered: return "Not Filtered";
-		case DiscordResult_LobbyFull: return "Lobby Full";
-		case DiscordResult_InvalidLobbySecret: return "Invalid Lobby Secret";
-		case DiscordResult_InvalidFilename: return "Invalid Filename";
-		case DiscordResult_InvalidFileSize: return "Invalid File Size";
-		case DiscordResult_InvalidEntitlement: return "Invalid Entitlement";
-		case DiscordResult_NotInstalled: return "Not Installed";
-		case DiscordResult_NotRunning: return "Not Running";
-		case DiscordResult_InsufficientBuffer: return "Insufficient Buffer";
-		case DiscordResult_PurchaseCanceled: return "Purchase Canceled";
-		case DiscordResult_InvalidGuild: return "Invalid Guild";
-		case DiscordResult_InvalidEvent: return "Invalid Event";
-		case DiscordResult_InvalidChannel: return "Invalid Channel";
-		case DiscordResult_InvalidOrigin: return "Invalid Origin";
-		case DiscordResult_RateLimited: return "Rate Limited";
-		case DiscordResult_OAuth2Error: return "OAuth2 Error";
-		case DiscordResult_SelectChannelTimeout: return "Select Channel Timeout";
-		case DiscordResult_GetGuildTimeout: return "Get Guild Timeout";
-		case DiscordResult_SelectVoiceForceRequired: return "Select Voice Force Required";
-		case DiscordResult_CaptureShortcutAlreadyListening: return "Capture Shortcut Already Listening";
-		case DiscordResult_UnauthorizedForAchievement: return "Unauthorized For Achievement";
-		case DiscordResult_InvalidGiftCode: return "Invalid Gift Code";
-		case DiscordResult_PurchaseError: return "Purchase Error";
-		case DiscordResult_TransactionAborted: return "Transaction Aborted";
+ * CL_DiscordErrorString
+ */
+static const char *CL_DiscordErrorString( enum EDiscordResult result )
+{
+	switch( result ) {
+		case DiscordResult_Ok:
+			return "Ok";
+		case DiscordResult_ServiceUnavailable:
+			return "Service Unavailable";
+		case DiscordResult_InvalidVersion:
+			return "Invalid Version";
+		case DiscordResult_LockFailed:
+			return "Lock Failed";
+		case DiscordResult_InternalError:
+			return "Internal Error";
+		case DiscordResult_InvalidPayload:
+			return "Invalid Payload";
+		case DiscordResult_InvalidCommand:
+			return "Invalid Command";
+		case DiscordResult_InvalidPermissions:
+			return "Invalid Permissions";
+		case DiscordResult_NotFetched:
+			return "Not Fetched";
+		case DiscordResult_NotFound:
+			return "Not Found";
+		case DiscordResult_Conflict:
+			return "Conflict";
+		case DiscordResult_InvalidSecret:
+			return "Invalid Secret";
+		case DiscordResult_InvalidJoinSecret:
+			return "Invalid Join Secret";
+		case DiscordResult_NoEligibleActivity:
+			return "No Eligible Activity";
+		case DiscordResult_InvalidInvite:
+			return "Invalid Invite";
+		case DiscordResult_NotAuthenticated:
+			return "Not Authenticated";
+		case DiscordResult_InvalidAccessToken:
+			return "Invalid Access Token";
+		case DiscordResult_ApplicationMismatch:
+			return "Application Mismatch";
+		case DiscordResult_InvalidDataUrl:
+			return "Invalid Data Url";
+		case DiscordResult_InvalidBase64:
+			return "Invalid Base64";
+		case DiscordResult_NotFiltered:
+			return "Not Filtered";
+		case DiscordResult_LobbyFull:
+			return "Lobby Full";
+		case DiscordResult_InvalidLobbySecret:
+			return "Invalid Lobby Secret";
+		case DiscordResult_InvalidFilename:
+			return "Invalid Filename";
+		case DiscordResult_InvalidFileSize:
+			return "Invalid File Size";
+		case DiscordResult_InvalidEntitlement:
+			return "Invalid Entitlement";
+		case DiscordResult_NotInstalled:
+			return "Not Installed";
+		case DiscordResult_NotRunning:
+			return "Not Running";
+		case DiscordResult_InsufficientBuffer:
+			return "Insufficient Buffer";
+		case DiscordResult_PurchaseCanceled:
+			return "Purchase Canceled";
+		case DiscordResult_InvalidGuild:
+			return "Invalid Guild";
+		case DiscordResult_InvalidEvent:
+			return "Invalid Event";
+		case DiscordResult_InvalidChannel:
+			return "Invalid Channel";
+		case DiscordResult_InvalidOrigin:
+			return "Invalid Origin";
+		case DiscordResult_RateLimited:
+			return "Rate Limited";
+		case DiscordResult_OAuth2Error:
+			return "OAuth2 Error";
+		case DiscordResult_SelectChannelTimeout:
+			return "Select Channel Timeout";
+		case DiscordResult_GetGuildTimeout:
+			return "Get Guild Timeout";
+		case DiscordResult_SelectVoiceForceRequired:
+			return "Select Voice Force Required";
+		case DiscordResult_CaptureShortcutAlreadyListening:
+			return "Capture Shortcut Already Listening";
+		case DiscordResult_UnauthorizedForAchievement:
+			return "Unauthorized For Achievement";
+		case DiscordResult_InvalidGiftCode:
+			return "Invalid Gift Code";
+		case DiscordResult_PurchaseError:
+			return "Purchase Error";
+		case DiscordResult_TransactionAborted:
+			return "Transaction Aborted";
 	}
 
 	return "Unknown Error ID";
 }
 
 /*
-* CL_DiscordDisconnected
-*/
-static void CL_DiscordDisconnected(int errorCode, const char* message) {
-	Com_Printf(S_COLOR_RED "Discord error %s: %s\n", CL_DiscordErrorString(errorCode), message);
+ * CL_DiscordDisconnected
+ */
+static void CL_DiscordDisconnected( int errorCode, const char *message )
+{
+	Com_Printf( S_COLOR_RED "Discord error %s: %s\n", CL_DiscordErrorString( errorCode ), message );
 }
 
-typedef enum {
-	DISCORD_INVALID,
-	DISCORD_INACTIVE,
-	DISCORD_ACTIVE
-} cl_discord_status_t;
+typedef enum { DISCORD_INVALID, DISCORD_INACTIVE, DISCORD_ACTIVE } cl_discord_status_t;
 
 typedef struct {
 	_Bool initialized;
@@ -153,10 +194,11 @@ typedef struct {
 static cl_discord_state_t cl_discord_state;
 
 /*
-* CL_DiscordReady
-*/
-static void CL_DiscordReady(const DiscordUser *user) {
-    Com_Printf("Loading Discord module... (%s)\n", user->username);
+ * CL_DiscordReady
+ */
+static void CL_DiscordReady( const DiscordUser *user )
+{
+	Com_Printf( "Loading Discord module... (%s)\n", user->username );
 	cl_discord_state.initialized = true;
 }
 
@@ -166,7 +208,7 @@ static void CL_DiscordReady(const DiscordUser *user) {
 
 static const char *CL_PlayerStatus( void )
 {
-	if ( cls.sv_tv ) {
+	if( cls.sv_tv ) {
 		return va( "tv" );
 	} else if( cls.demo.playing ) {
 		return va( "demo" );
@@ -174,7 +216,7 @@ static const char *CL_PlayerStatus( void )
 		return va( "spectating" );
 	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_WARMUP ) {
 		return va( "warmup" ); // Only applicable if you're playing.
-	}  else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) {
+	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) {
 		return va( "timeout" ); // Only applicable if you're playing.
 	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_POSTMATCH ) {
 		return va( "gameover" ); // Only applicable if you're playing.
@@ -183,14 +225,13 @@ static const char *CL_PlayerStatus( void )
 }
 
 /*
-* CL_UpdateDiscord
-*/
-void CL_UpdateDiscord(void) {
-
-  unsigned int now = Sys_Milliseconds();
+ * CL_UpdateDiscord
+ */
+void CL_UpdateDiscord( void )
+{
+	unsigned int now = Sys_Milliseconds();
 	if( cl_discord_state.initialized ) {
 		if( cl_discord_state.next_update <= now ) {
-			
 			// Discord rate limit is 15s, but this has been tested and is fine!
 			cl_discord_state.next_update = now + 1000;
 
@@ -198,9 +239,8 @@ void CL_UpdateDiscord(void) {
 
 			char details[128];
 			char joinSecret[128];
-			char spectateSecret[128];
 
-			if (cls.state >= CA_CONNECTED) {
+			if( cls.state >= CA_CONNECTED ) {
 				const char *valid_maps[] = { "13vast",
 											 "36dm2_b1",
 											 "36dm4",
@@ -500,40 +540,38 @@ void CL_UpdateDiscord(void) {
 						break;
 					}
 				}
-				
+
 				presence.largeImageKey = valid_map ? mapname : "unknownmap"; // Levelshot
-				presence.largeImageText = cl.configstrings[CS_HOSTNAME]; // Server name
+				presence.largeImageText = cl.configstrings[CS_HOSTNAME];	 // Server name
 				presence.smallImageKey = CL_PlayerStatus();
 				presence.smallImageText = CL_PlayerStatus();
 				presence.state = valid_map ? mapname : "unknownmap"; // Map name
 
-				Q_snprintfz( details, sizeof( details ), "(%s) %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MATCHSCORE] );
+				Q_snprintfz( details, sizeof( details ), "%s %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MATCHSCORE] );
 				presence.details = details; // Gametype and Score (if available)
 
-				// If server is not localhost
-				if (cls.servertype != SOCKET_LOOPBACK) {
+				// If server is localhost
+				if( cls.servertype == SOCKET_LOOPBACK ) {
+					presence.partyId = cl.configstrings[CS_HOSTNAME];
 
+					snprintf( joinSecret, sizeof( joinSecret ), "JOIN_%s", presence.partyId );
+					presence.joinSecret = joinSecret;
 				}
 
 				presence.partySize = cl.snapShots[cl.currentSnapNum & UPDATE_MASK].numplayers; // Total clients connected
-				presence.partyMax = atoi(cl.configstrings[CS_MAXCLIENTS]); // Max clients
+				presence.partyMax = atoi( cl.configstrings[CS_MAXCLIENTS] );				   // Max clients
 				presence.instance = true;
-			}
-			else if( cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING || cls.state == CA_HANDSHAKE ) 
-			{
+			} else if( cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING || cls.state == CA_HANDSHAKE ) {
 				presence.largeImageKey = "connecting";
 				presence.state = "Attempting to fork!";
 				presence.details = "Connecting";
-			}
-			else
-			{
+			} else {
 				presence.largeImageKey = "mainmenu";
 				presence.state = "Not ready to fork!";
 				presence.details = "Main Menu";
 			}
 
-			Discord_UpdatePresence(&presence);
-
+			Discord_UpdatePresence( &presence );
 		}
 	}
 
@@ -541,31 +579,30 @@ void CL_UpdateDiscord(void) {
 }
 
 /*
-* CL_DiscordJoinGame
-*/
-static void CL_DiscordJoinGame(const char *secret) {
+ * CL_DiscordJoinGame
+ */
+static void CL_DiscordJoinGame( const char *secret )
+{
+	if( Q_strnicmp( secret, "JOIN_", 5 ) ) {
+		Com_Printf( S_COLOR_RED "Invalid invitation.\n" );
+		return;
+	}
 
+	va( "connect %s\n", ( secret + 5 ) );
 }
 
 /*
-* CL_DiscordJoinRequest
-*/
-static void CL_DiscordJoinRequest(const DiscordUser *request) {
-
+ * CL_DiscordJoinRequest
+ */
+static void CL_DiscordJoinRequest( const DiscordUser *request )
+{
 	// TODO: display UI for this
-	Discord_Respond(request->userId, DISCORD_REPLY_YES);
+	Discord_Respond( request->userId, DISCORD_REPLY_YES );
 }
 
 /*
-* CL_DiscordSpectateGame
-*/
-static void CL_DiscordSpectateGame(const char *secret) {
-
-}
-
-/*
-* CL_InitDiscord
-*/
+ * CL_InitDiscord
+ */
 void CL_InitDiscord( void )
 {
 	static DiscordEventHandlers handlers = {
@@ -574,19 +611,18 @@ void CL_InitDiscord( void )
 		.joinGame = CL_DiscordJoinGame,
 		.joinRequest = CL_DiscordJoinRequest,
 		.errored = CL_DiscordDisconnected,
-		.spectateGame = CL_DiscordSpectateGame
 	};
-	Discord_Initialize(G_STRINGIFY(DISCORD_APP_ID), &handlers, 1, NULL);	
+	Discord_Initialize( G_STRINGIFY( DISCORD_APP_ID ), &handlers, 1, NULL );
 }
 
 /*
-* CL_ShutdownDiscord
-*/
+ * CL_ShutdownDiscord
+ */
 void CL_ShutdownDiscord( void )
 {
 	Discord_Shutdown();
 
-	memset(&cl_discord_state, 0, sizeof(cl_discord_state));
+	memset( &cl_discord_state, 0, sizeof( cl_discord_state ) );
 
-    Com_Printf( "Discord module unloaded.\n" );			
+	Com_Printf( "Discord module unloaded.\n" );
 }
