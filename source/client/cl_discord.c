@@ -27,6 +27,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "discord_rpc.h"
 
 #define DISCORD_APP_ID 1074038981802598491
+#define DISCORD_PARTY_PRIVATE 0
+#define DISCORD_PARTY_PUBLIC 1
 #define G_STRINGIFY( macro_or_string ) G_STRINGIFY_ARG( macro_or_string )
 #define G_STRINGIFY_ARG( contents ) #contents
 
@@ -176,6 +178,299 @@ static const char *CL_DiscordErrorString( enum EDiscordResult result )
 	return "Unknown Error ID";
 }
 
+static const char *valid_maps[] = {
+	"13vast",
+	"36dm2_b1",
+	"36dm4",
+	"36dm5",
+	"3hours",
+	"3v11",
+	"3v11_b4",
+	"50u1ca1",
+	"50u1ca100",
+	"50u1ca101",
+	"abandoned",
+	"acid3dm10",
+	"acid3dm5",
+	"acid3dm7",
+	"acid3dm9",
+	"acidwctf2",
+	"acidwdm11",
+	"acidwdm2",
+	"acidwdm6",
+	"actdm1",
+	"ae",
+	"aerorun",
+	"air_sac_",
+	"air-nasa",
+	"airfun",
+	"alley",
+	"alley_cr",
+	"antistat",
+	"aow_fragland_b7",
+	"aow-fragland_b5",
+	"aow-fragland_b7-1",
+	"army",
+	"auh3dm1",
+	"b1601763810",
+	"baby_wca1",
+	"billyhill",
+	"blood_covenant",
+	"boot_camp_b3",
+	"btmid1_004",
+	"btmid1_004_i",
+	"btmid2_002",
+	"btmid2_002_i",
+	"btmid4_001",
+	"btmid4_001_i",
+	"cal_ca1",
+	"cal_da1",
+	"cal_da3",
+	"capturecity_coder",
+	"carbon",
+	"ccdm1-tekktonic",
+	"chiropteradm",
+	"chronic_coder",
+	"cht2",
+	"claustrophobia",
+	"cocaine_b1",
+	"coldwarctf",
+	"criziswdm3",
+	"ct3dm4",
+	"ct3tourney2",
+	"ctctf6",
+	"ctf_kothet",
+	"ctf_kothet_cc",
+	"cunete",
+	"cure",
+	"cwbomb1",
+	"cwctf1",
+	"cwl1",
+	"cwl2",
+	"cwl3",
+	"cwl4",
+	"cwl5",
+	"cwm1",
+	"cwm2",
+	"cwm3",
+	"cwm4",
+	"cwm5",
+	"cwm6",
+	"cwm7",
+	"cwrace1",
+	"cwrace2",
+	"cwrace3",
+	"cwrace4",
+	"cwrace5",
+	"cws1",
+	"cws2",
+	"cxbomb2b",
+	"d3xf1",
+	"darkbomb1",
+	"darkcity_coder",
+	"de06",
+	"debonaire",
+	"decompression",
+	"decompression00",
+	"decompression01",
+	"dm_etages_b",
+	"downtown",
+	"duel_boogyvan",
+	"emctf1",
+	"emsummer",
+	"emtown",
+	"emwarehouse",
+	"etramphi",
+	"etramphi2",
+	"etramphi3",
+	"face",
+	"factory_beta",
+	"feros",
+	"fi_ctf1m",
+	"focal_p132",
+	"fr3dm1",
+	"fragcity_coder",
+	"furiousheights",
+	"giantshome",
+	"goldleaf",
+	"gork",
+	"gwsw3aprefinal",
+	"haduca_1",
+	"hesus_ra",
+	"hylith_ctc1_b5",
+	"icepart2",
+	"ictfmoar",
+	"ik3dm2",
+	"industrial",
+	"instactf1",
+	"instactf1-x",
+	"ionicsslidehouse",
+	"jerms_beta1",
+	"jerms_ca1",
+	"jerms_ca2",
+	"jerms_ca3",
+	"jerms_ca4",
+	"jerms_ctf2",
+	"jerms_da1",
+	"jerms_da2",
+	"jerms_da4",
+	"jerms_da5_1",
+	"jerms_da5_2",
+	"jerms_da5_3",
+	"jerms_ica1",
+	"jihras",
+	"jof3dm2",
+	"josher_b1",
+	"kikimid_b1",
+	"lawbomb1b3",
+	"lawbombb2",
+	"lazurab1",
+	"lg",
+	"lltdm1v2",
+	"lltdm1v350",
+	"lolface",
+	"losthope",
+	"lsdm1",
+	"lulz",
+	"lun3_20b1",
+	"lun3dm5",
+	"malicious",
+	"midair_b3",
+	"midair_b5",
+	"midair_b6",
+	"moddm17",
+	"motoville",
+	"mxl_school",
+	"necro6",
+	"nodm14",
+	"outpost",
+	"outpost-rf",
+	"overkill",
+	"ozbomb",
+	"partdm1",
+	"paswdm1",
+	"paswdm1_b2",
+	"paswdm1_b2_sounds",
+	"plduel2",
+	"pro-ct3tourney2",
+	"psl_koth",
+	"pukka3tourney3",
+	"pukka3tourney7",
+	"qfraggel3ffa",
+	"qfraggel3tdm",
+	"rab3_duel1_v1",
+	"rab3dm1",
+	"rab3dm1_b1",
+	"rats_waitingroom",
+	"reactors",
+	"reactors_2",
+	"reqbath",
+	"reqkitchen",
+	"retard2",
+	"rota3ctf1",
+	"rota3ctf2",
+	"rustgrad",
+	"scduel1a3",
+	"seasoned",
+	"sf-xmas08",
+	"sfkoth1_b1",
+	"shepas",
+	"shibam",
+	"shiz_q1dm2",
+	"sinister",
+	"sinjage_",
+	"skyscrapers",
+	"slide_air_b1",
+	"slide_air_b2",
+	"slide_arena_v3",
+	"slide_baby_v7",
+	"slide_bipbeta_dirty",
+	"slide_flat",
+	"slide_flat_v2",
+	"slide_flat_v3",
+	"slide_nyan_b1",
+	"slide_nyan_b4",
+	"slide_nyan_b6",
+	"slide_tortus_b1",
+	"slidehouse",
+	"slidehouse_lava",
+	"slidehouse_lava_b1",
+	"slidehouse_lava_lol",
+	"sohca1",
+	"sokar3dm5",
+	"sparth",
+	"speedyctf",
+	"stormsector7_alpha3",
+	"summerbeta",
+	"svartholma",
+	"t3ch",
+	"theedged",
+	"tlebomb1",
+	"tlebomb1a",
+	"tlebomb2",
+	"torn",
+	"tournw1",
+	"trespass",
+	"undergroundb2",
+	"unitooldm6",
+	"wca1xmas",
+	"wca3",
+	"wcai",
+	"wctc1_b2",
+	"wctc2",
+	"wfa1insta",
+	"wfamphi1",
+	"wfbomb1",
+	"wfbomb2",
+	"wfbomb3",
+	"wfbomb4",
+	"wfbomb5",
+	"wfbomb6",
+	"wfca1",
+	"wfca2",
+	"wfctf1",
+	"wfctf2",
+	"wfctf3",
+	"wfctf4",
+	"wfctf5",
+	"wfctf6",
+	"wfda1",
+	"wfda2",
+	"wfda3",
+	"wfda4",
+	"wfda5",
+	"wfdm1",
+	"wfdm10",
+	"wfdm11",
+	"wfdm12",
+	"wfdm13",
+	"wfdm14",
+	"wfdm15",
+	"wfdm16",
+	"wfdm17",
+	"wfdm18",
+	"wfdm19",
+	"wfdm2",
+	"wfdm20",
+	"wfdm3",
+	"wfdm4",
+	"wfdm5",
+	"wfdm6",
+	"wfdm7",
+	"wfdm8",
+	"wfdm9",
+	"wfrace1",
+	"wftutorial1",
+	"wsw00021",
+	"wsw00049",
+	"wtdm-gr3nd3lk33p",
+	"xfdm2",
+	"xmas_river",
+	"ztn2dm2",
+	"ztn2dm3",
+	"zxymid1",
+};
+
 /*
  * CL_DiscordDisconnected
  */
@@ -184,14 +479,61 @@ static void CL_DiscordDisconnected( int errorCode, const char *message )
 	Com_Printf( S_COLOR_RED "Discord error %s: %s\n", CL_DiscordErrorString( errorCode ), message );
 }
 
-typedef enum { DISCORD_INVALID, DISCORD_INACTIVE, DISCORD_ACTIVE } cl_discord_status_t;
+typedef struct RichPresence {
+	char state[128];
+	char details[128];
+	int64_t startTimestamp;
+	int64_t endTimestamp;
+	char largeImageKey[32];
+	char largeImageText[128];
+	char smallImageKey[32];
+	char smallImageText[128];
+	char partyId[128];
+	int partySize;
+	int partyMax;
+	int partyPrivacy;
+	char matchSecret[128];
+	char joinSecret[128];
+	char spectateSecret[128];
+	int8_t instance;
+} RichPresence;
 
 typedef struct {
 	_Bool initialized;
 	unsigned int next_update;
+	RichPresence old_presence;
 } cl_discord_state_t;
 
 static cl_discord_state_t cl_discord_state;
+
+void UpdatePresenceIfChanged( RichPresence presence )
+{
+	if( memcmp( &cl_discord_state.old_presence, &presence, sizeof( presence ) ) == 0 ) {
+		return;
+	}
+
+	cl_discord_state.old_presence = presence;
+
+	DiscordRichPresence discord = { 0 };
+	discord.state = presence.state;
+	discord.details = presence.details;
+	discord.startTimestamp = presence.startTimestamp;
+	discord.endTimestamp = presence.endTimestamp;
+	discord.largeImageKey = presence.largeImageKey;
+	discord.largeImageText = presence.largeImageText;
+	discord.smallImageKey = presence.smallImageKey;
+	discord.smallImageText = presence.smallImageText;
+	discord.partyId = presence.partyId;
+	discord.partySize = presence.partySize;
+	discord.partyMax = presence.partyMax;
+	discord.partyPrivacy = presence.partyPrivacy;
+	discord.matchSecret = presence.matchSecret;
+	discord.joinSecret = presence.joinSecret;
+	discord.spectateSecret = presence.spectateSecret;
+	discord.instance = presence.instance;
+
+	Discord_UpdatePresence( &discord );
+}
 
 /*
  * CL_DiscordReady
@@ -227,310 +569,20 @@ static const char *CL_PlayerStatus( void )
 /*
  * CL_UpdateDiscord
  */
+
 void CL_UpdateDiscord( void )
 {
-	unsigned int now = Sys_Milliseconds();
 	if( cl_discord_state.initialized ) {
+		unsigned int now = Sys_Milliseconds();
 		if( cl_discord_state.next_update <= now ) {
 			// Discord rate limit is 15s, but this has been tested and is fine!
 			cl_discord_state.next_update = now + 1000;
 
-			DiscordRichPresence presence = { 0 };
+			RichPresence presence = { 0 };
 
 			char details[128];
-			char joinSecret[128];
 
-			if( cls.state >= CA_CONNECTED ) {
-				const char *valid_maps[] = { "13vast",
-											 "36dm2_b1",
-											 "36dm4",
-											 "36dm5",
-											 "3hours",
-											 "3v11",
-											 "3v11_b4",
-											 "50u1ca1",
-											 "50u1ca100",
-											 "50u1ca101",
-											 "abandoned",
-											 "acid3dm10",
-											 "acid3dm5",
-											 "acid3dm7",
-											 "acid3dm9",
-											 "acidwctf2",
-											 "acidwdm11",
-											 "acidwdm2",
-											 "acidwdm6",
-											 "actdm1",
-											 "ae",
-											 "aerorun",
-											 "air_sac_",
-											 "air-nasa",
-											 "airfun",
-											 "alley",
-											 "alley_cr",
-											 "antistat",
-											 "aow_fragland_b7",
-											 "aow-fragland_b5",
-											 "aow-fragland_b7-1",
-											 "army",
-											 "auh3dm1",
-											 "b1601763810",
-											 "baby_wca1",
-											 "billyhill",
-											 "blood_covenant",
-											 "boot_camp_b3",
-											 "btmid1_004",
-											 "btmid1_004_i",
-											 "btmid2_002",
-											 "btmid2_002_i",
-											 "btmid4_001",
-											 "btmid4_001_i",
-											 "cal_ca1",
-											 "cal_da1",
-											 "cal_da3",
-											 "capturecity_coder",
-											 "carbon",
-											 "ccdm1-tekktonic",
-											 "chiropteradm",
-											 "chronic_coder",
-											 "cht2",
-											 "claustrophobia",
-											 "cocaine_b1",
-											 "coldwarctf",
-											 "criziswdm3",
-											 "ct3dm4",
-											 "ct3tourney2",
-											 "ctctf6",
-											 "ctf_kothet",
-											 "ctf_kothet_cc",
-											 "cunete",
-											 "cure",
-											 "cwbomb1",
-											 "cwctf1",
-											 "cwl1",
-											 "cwl2",
-											 "cwl3",
-											 "cwl4",
-											 "cwl5",
-											 "cwm1",
-											 "cwm2",
-											 "cwm3",
-											 "cwm4",
-											 "cwm5",
-											 "cwm6",
-											 "cwm7",
-											 "cwrace1",
-											 "cwrace2",
-											 "cwrace3",
-											 "cwrace4",
-											 "cwrace5",
-											 "cws1",
-											 "cws2",
-											 "cxbomb2b",
-											 "d3xf1",
-											 "darkbomb1",
-											 "darkcity_coder",
-											 "de06",
-											 "debonaire",
-											 "decompression",
-											 "decompression00",
-											 "decompression01",
-											 "dm_etages_b",
-											 "downtown",
-											 "duel_boogyvan",
-											 "emctf1",
-											 "emsummer",
-											 "emtown",
-											 "emwarehouse",
-											 "etramphi",
-											 "etramphi2",
-											 "etramphi3",
-											 "face",
-											 "factory_beta",
-											 "feros",
-											 "fi_ctf1m",
-											 "focal_p132",
-											 "fr3dm1",
-											 "fragcity_coder",
-											 "furiousheights",
-											 "giantshome",
-											 "goldleaf",
-											 "gork",
-											 "gwsw3aprefinal",
-											 "haduca_1",
-											 "hesus_ra",
-											 "hylith_ctc1_b5",
-											 "icepart2",
-											 "ictfmoar",
-											 "ik3dm2",
-											 "industrial",
-											 "instactf1",
-											 "instactf1-x",
-											 "ionicsslidehouse",
-											 "jerms_beta1",
-											 "jerms_ca1",
-											 "jerms_ca2",
-											 "jerms_ca3",
-											 "jerms_ca4",
-											 "jerms_ctf2",
-											 "jerms_da1",
-											 "jerms_da2",
-											 "jerms_da4",
-											 "jerms_da5_1",
-											 "jerms_da5_2",
-											 "jerms_da5_3",
-											 "jerms_ica1",
-											 "jihras",
-											 "jof3dm2",
-											 "josher_b1",
-											 "kikimid_b1",
-											 "lawbomb1b3",
-											 "lawbombb2",
-											 "lazurab1",
-											 "lg",
-											 "lltdm1v2",
-											 "lltdm1v350",
-											 "lolface",
-											 "losthope",
-											 "lsdm1",
-											 "lulz",
-											 "lun3_20b1",
-											 "lun3dm5",
-											 "malicious",
-											 "midair_b3",
-											 "midair_b5",
-											 "midair_b6",
-											 "moddm17",
-											 "motoville",
-											 "mxl_school",
-											 "necro6",
-											 "nodm14",
-											 "outpost",
-											 "outpost-rf",
-											 "overkill",
-											 "ozbomb",
-											 "partdm1",
-											 "paswdm1",
-											 "paswdm1_b2",
-											 "paswdm1_b2_sounds",
-											 "plduel2",
-											 "pro-ct3tourney2",
-											 "psl_koth",
-											 "pukka3tourney3",
-											 "pukka3tourney7",
-											 "qfraggel3ffa",
-											 "qfraggel3tdm",
-											 "rab3_duel1_v1",
-											 "rab3dm1",
-											 "rab3dm1_b1",
-											 "rats_waitingroom",
-											 "reactors",
-											 "reactors_2",
-											 "reqbath",
-											 "reqkitchen",
-											 "retard2",
-											 "rota3ctf1",
-											 "rota3ctf2",
-											 "rustgrad",
-											 "scduel1a3",
-											 "seasoned",
-											 "sf-xmas08",
-											 "sfkoth1_b1",
-											 "shepas",
-											 "shibam",
-											 "shiz_q1dm2",
-											 "sinister",
-											 "sinjage_",
-											 "skyscrapers",
-											 "slide_air_b1",
-											 "slide_air_b2",
-											 "slide_arena_v3",
-											 "slide_baby_v7",
-											 "slide_bipbeta_dirty",
-											 "slide_flat",
-											 "slide_flat_v2",
-											 "slide_flat_v3",
-											 "slide_nyan_b1",
-											 "slide_nyan_b4",
-											 "slide_nyan_b6",
-											 "slide_tortus_b1",
-											 "slidehouse",
-											 "slidehouse_lava",
-											 "slidehouse_lava_b1",
-											 "slidehouse_lava_lol",
-											 "sohca1",
-											 "sokar3dm5",
-											 "sparth",
-											 "speedyctf",
-											 "stormsector7_alpha3",
-											 "summerbeta",
-											 "svartholma",
-											 "t3ch",
-											 "theedged",
-											 "tlebomb1",
-											 "tlebomb1a",
-											 "tlebomb2",
-											 "torn",
-											 "tournw1",
-											 "trespass",
-											 "undergroundb2",
-											 "unitooldm6",
-											 "wca1xmas",
-											 "wca3",
-											 "wcai",
-											 "wctc1_b2",
-											 "wctc2",
-											 "wfa1insta",
-											 "wfamphi1",
-											 "wfbomb1",
-											 "wfbomb2",
-											 "wfbomb3",
-											 "wfbomb4",
-											 "wfbomb5",
-											 "wfbomb6",
-											 "wfca1",
-											 "wfca2",
-											 "wfctf1",
-											 "wfctf2",
-											 "wfctf3",
-											 "wfctf4",
-											 "wfctf5",
-											 "wfctf6",
-											 "wfda1",
-											 "wfda2",
-											 "wfda3",
-											 "wfda4",
-											 "wfda5",
-											 "wfdm1",
-											 "wfdm10",
-											 "wfdm11",
-											 "wfdm12",
-											 "wfdm13",
-											 "wfdm14",
-											 "wfdm15",
-											 "wfdm16",
-											 "wfdm17",
-											 "wfdm18",
-											 "wfdm19",
-											 "wfdm2",
-											 "wfdm20",
-											 "wfdm3",
-											 "wfdm4",
-											 "wfdm5",
-											 "wfdm6",
-											 "wfdm7",
-											 "wfdm8",
-											 "wfdm9",
-											 "wfrace1",
-											 "wftutorial1",
-											 "wsw00021",
-											 "wsw00049",
-											 "wtdm-gr3nd3lk33p",
-											 "xfdm2",
-											 "xmas_river",
-											 "ztn2dm2",
-											 "ztn2dm3",
-											 "zxymid1" };
+			if( cls.state == CA_ACTIVE ) {
 				const size_t num_valid_maps = sizeof( valid_maps ) / sizeof( valid_maps[0] );
 				const char *mapname = cl.configstrings[CS_MAPNAME];
 				bool valid_map = false;
@@ -541,37 +593,35 @@ void CL_UpdateDiscord( void )
 					}
 				}
 
-				presence.largeImageKey = valid_map ? mapname : "unknownmap"; // Levelshot
-				presence.largeImageText = cl.configstrings[CS_HOSTNAME];	 // Server name
-				presence.smallImageKey = CL_PlayerStatus();
-				presence.smallImageText = CL_PlayerStatus();
-				presence.state = valid_map ? mapname : "unknownmap"; // Map name
+				strcpy( presence.largeImageKey, valid_map ? mapname : "unknownmap" ); // Levelshot
+				strcpy( presence.largeImageText, cl.configstrings[CS_HOSTNAME] );	  // Server name
+				strcpy( presence.smallImageKey, CL_PlayerStatus() );
+				strcpy( presence.smallImageText, CL_PlayerStatus() );
+				strcpy( presence.state, valid_map ? mapname : "unknownmap" ); // Map name
 
-				Q_snprintfz( details, sizeof( details ), "%s %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MATCHSCORE] );
-				presence.details = details; // Gametype and Score (if available)
+				// Gametype and Score (if available)
+				Q_snprintfz( presence.details, sizeof( details ), "%s %s", cl.configstrings[CS_GAMETYPENAME], cl.configstrings[CS_MATCHSCORE] );
+				strcpy( presence.partyId, cl.configstrings[CS_HOSTNAME] );
 
-				// If server is localhost
-				if( cls.servertype == SOCKET_LOOPBACK ) {
-					presence.partyId = cl.configstrings[CS_HOSTNAME];
-
-					snprintf( joinSecret, sizeof( joinSecret ), "JOIN_%s", presence.partyId );
-					presence.joinSecret = joinSecret;
+				// If server is not localhost
+				if( cls.servertype != SOCKET_LOOPBACK ) {
+					strcpy( presence.joinSecret, NET_AddressToString( &cls.serveraddress ) );
 				}
 
 				presence.partySize = cl.snapShots[cl.currentSnapNum & UPDATE_MASK].numplayers; // Total clients connected
 				presence.partyMax = atoi( cl.configstrings[CS_MAXCLIENTS] );				   // Max clients
 				presence.instance = true;
-			} else if( cls.state == CA_GETTING_TICKET || cls.state == CA_CONNECTING || cls.state == CA_HANDSHAKE ) {
-				presence.largeImageKey = "connecting";
-				presence.state = "Attempting to fork!";
-				presence.details = "Connecting";
+			} else if( cls.state > CA_DISCONNECTED && cls.state < CA_ACTIVE ) {
+				strcpy( presence.largeImageKey, "connecting" );
+				strcpy( presence.state, "Attempting to fork!" );
+				strcpy( presence.details, "Connecting" );
 			} else {
-				presence.largeImageKey = "mainmenu";
-				presence.state = "Not ready to fork!";
-				presence.details = "Main Menu";
+				strcpy( presence.largeImageKey, "mainmenu" );
+				strcpy( presence.state, "Not ready to fork!" );
+				strcpy( presence.details, "Main Menu" );
 			}
 
-			Discord_UpdatePresence( &presence );
+			UpdatePresenceIfChanged( presence );
 		}
 	}
 
@@ -583,12 +633,9 @@ void CL_UpdateDiscord( void )
  */
 static void CL_DiscordJoinGame( const char *secret )
 {
-	if( Q_strnicmp( secret, "JOIN_", 5 ) ) {
-		Com_Printf( S_COLOR_RED "Invalid invitation.\n" );
-		return;
-	}
-
-	va( "connect %s\n", ( secret + 5 ) );
+	char cmd[256];
+	Q_snprintfz( cmd, sizeof( cmd ), "connect %s", secret );
+	Cbuf_ExecuteText( EXEC_NOW, cmd );
 }
 
 /*
