@@ -540,7 +540,7 @@ void UpdatePresenceIfChanged( RichPresence presence )
  */
 static void CL_DiscordReady( const DiscordUser *user )
 {
-	Com_Printf( "Loading Discord module... (%s)\n", user->username );
+	Com_Printf( "Loading Discord module... (%s)\n", user->userId );
 	cl_discord_state.initialized = true;
 }
 
