@@ -550,9 +550,7 @@ static void CL_DiscordReady( const DiscordUser *user )
 
 static const char *CL_PlayerStatus( void )
 {
-	if( cls.sv_tv ) {
-		return va( "tv" );
-	} else if( cls.demo.playing ) {
+	if( cls.demo.playing ) {
 		return va( "demo" );
 	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
 		return va( "spectating" );
