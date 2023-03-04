@@ -2089,7 +2089,7 @@ static void G_CallVotes_CheckState( void )
 		if( !ent->r.inuse || trap_GetClientState( PLAYERNUM( ent ) ) < CS_SPAWNED )
 			continue;
 
-		if ( (ent->r.svflags & SVF_FAKECLIENT) || client->isTV )
+		if ( ent->r.svflags & SVF_FAKECLIENT )
 			continue;
 
 		// ignore inactive players unless they have voted
@@ -2159,7 +2159,7 @@ void G_CallVotes_CmdVote( edict_t *ent )
 
 	if( !ent->r.client )
 		return;
-	if( ( ent->r.svflags & SVF_FAKECLIENT ) || ent->r.client->isTV )
+	if( ent->r.svflags & SVF_FAKECLIENT )
 		return;
 
 	if( !callvoteState.vote.callvote )
@@ -2418,7 +2418,7 @@ static void G_CallVote( edict_t *ent, bool isopcall )
 */
 void G_CallVote_Cmd( edict_t *ent )
 {
-	if( ( ent->r.svflags & SVF_FAKECLIENT ) || ent->r.client->isTV )
+	if( ent->r.svflags & SVF_FAKECLIENT )
 		return;
 	G_CallVote( ent, false );
 }
@@ -2433,7 +2433,7 @@ void G_OperatorVote_Cmd( edict_t *ent )
 
 	if( !ent->r.client )
 		return;
-	if( ( ent->r.svflags & SVF_FAKECLIENT ) || ent->r.client->isTV )
+	if( ent->r.svflags & SVF_FAKECLIENT )
 		return;
 
 	if( !ent->r.client->isoperator )
@@ -2474,7 +2474,7 @@ void G_OperatorVote_Cmd( edict_t *ent )
 		{
 			if( !other->r.inuse || trap_GetClientState( PLAYERNUM( other ) ) < CS_SPAWNED )
 				continue;
-			if( ( other->r.svflags & SVF_FAKECLIENT ) || other->r.client->isTV )
+			if( other->r.svflags & SVF_FAKECLIENT )
 				continue;
 
 			clientVoted[PLAYERNUM( other )] = forceVote;
@@ -2513,21 +2513,6 @@ void G_OperatorVote_Cmd( edict_t *ent )
 		G_Teams_SetTeam( playerEnt, newTeam );
 		G_PrintMsg( NULL, "%s was moved to team %s by %s.\n", playerEnt->r.client->netname, GS_TeamName( newTeam ), ent->r.client->netname );
 
-		return;
-	}
-
-	if( !Q_stricmp( trap_Cmd_Argv( 1 ), "specstotv" ) )
-	{
-		for( other = game.edicts + 1; PLAYERNUM( other ) < gs.maxclients; other++ )
-		{
-			if( !other->r.inuse || trap_GetClientState( PLAYERNUM( other ) ) < CS_SPAWNED )
-				continue;
-			if( other->r.client->isoperator )
-				continue;
-			if( other->s.team != TEAM_SPECTATOR )
-				continue;
-			G_MoveClientToTV( other );
-		}
 		return;
 	}
 

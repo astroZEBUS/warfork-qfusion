@@ -281,7 +281,7 @@ static char *SV_LongInfoString( bool fullStatus )
 		cl = &svs.clients[i];
 		if( cl->state >= CS_CONNECTED )
 		{
-			if( cl->edict->r.svflags & SVF_FAKECLIENT || cl->tvclient )
+			if( cl->edict->r.svflags & SVF_FAKECLIENT )
 				bots++;
 			count++;
 		}
@@ -339,7 +339,7 @@ static char *SV_ShortInfoString( void )
 	{
 		if( svs.clients[i].state >= CS_CONNECTED )
 		{
-			if( svs.clients[i].edict->r.svflags & SVF_FAKECLIENT || svs.clients[i].tvclient )
+			if( svs.clients[i].edict->r.svflags & SVF_FAKECLIENT )
 				bots++;
 			else
 				count++;
@@ -648,7 +648,6 @@ static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address )
 	int session_id;
 	char *session_id_str;
 	unsigned int ticket_id;
-	bool tv_client;
 	unsigned int time;
 
 	Com_DPrintf( "SVC_DirectConnect (%s)\n", Cmd_Args() );
@@ -672,7 +671,6 @@ static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address )
 
 	game_port = atoi( Cmd_Argv( 2 ) );
 	challenge = atoi( Cmd_Argv( 3 ) );
-	tv_client = ( atoi( Cmd_Argv( 5 ) ) & 1 ? true : false );
 
 	if( !Info_Validate( Cmd_Argv( 4 ) ) )
 	{
@@ -838,7 +836,7 @@ static void SVC_DirectConnect( const socket_t *socket, const netadr_t *address )
 
 	// get the game a chance to reject this connection or modify the userinfo
 	if( !SV_ClientConnect( socket, address, newcl, userinfo, game_port, challenge, false, 
-		tv_client, ticket_id, session_id ) )
+		ticket_id, session_id ) )
 	{
 		char *rejtype, *rejflag, *rejtypeflag, *rejmsg;
 
@@ -921,7 +919,7 @@ int SVC_FakeConnect( char *fakeUserinfo, char *fakeSocketType, const char *fakeI
 
 	NET_InitAddress( &address, NA_NOTRANSMIT );
 	// get the game a chance to reject this connection or modify the userinfo
-	if( !SV_ClientConnect( NULL, &address, newcl, userinfo, -1, -1, true, false, 0, 0 ) )
+	if( !SV_ClientConnect( NULL, &address, newcl, userinfo, -1, -1, true, 0, 0 ) )
 	{
 		Com_DPrintf( "Game rejected a connection.\n" );
 		return -1;
@@ -1095,8 +1093,6 @@ bool SV_SteamServerQuery( const char *s, const socket_t *socket, const netadr_t 
 			cl = &svs.clients[i];
 			if( cl->state >= CS_CONNECTED )
 			{
-				if( cl->tvclient ) // exclude TV from the max players count
-					continue;
 				if( cl->edict->r.svflags & SVF_FAKECLIENT )
 					bots++;
 				players++;
@@ -1159,7 +1155,7 @@ bool SV_SteamServerQuery( const char *s, const socket_t *socket, const netadr_t 
 		for( i = 0; i < sv_maxclients->integer; i++ )
 		{
 			cl = &svs.clients[i];
-			if( ( cl->state < CS_CONNECTED ) || cl->tvclient )
+			if( cl->state < CS_CONNECTED )
 				continue;
 
 			Q_strncpyz( name, COM_RemoveColorTokens( cl->name ), sizeof( name ) );
@@ -1217,8 +1213,6 @@ bool SV_SteamServerQuery( const char *s, const socket_t *socket, const netadr_t 
 			cl = &svs.clients[i];
 			if( cl->state >= CS_CONNECTED )
 			{
-				if( cl->tvclient ) // exclude TV from the max players count
-					continue;
 				if( cl->edict->r.svflags & SVF_FAKECLIENT )
 					bots++;
 				players++;

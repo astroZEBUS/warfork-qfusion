@@ -63,7 +63,6 @@ typedef struct
 
 	char configstrings[MAX_CONFIGSTRINGS][MAX_CONFIGSTRING_CHARS];
 	entity_state_t baselines[MAX_EDICTS];
-	int num_mv_clients;     // current number, <= sv_maxmvclients
 
 	//
 	// global variables shared between game and server
@@ -181,8 +180,6 @@ typedef struct client_s
 	int challenge;                  // challenge of this user, randomly generated
 
 	netchan_t netchan;
-
-	bool tvclient;
 
 	int mm_session;
 	unsigned int mm_ticket;
@@ -338,7 +335,6 @@ extern cvar_t *sv_http_upstream_realip_header;
 
 extern cvar_t *sv_skilllevel;
 extern cvar_t *sv_maxclients;
-extern cvar_t *sv_maxmvclients;
 
 extern cvar_t *sv_enforcetime;
 extern cvar_t *sv_showRcon;
@@ -471,7 +467,7 @@ void SV_BroadcastCommand( const char *format, ... );
 //
 void SV_ParseClientMessage( client_t *client, msg_t *msg );
 bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t *client, char *userinfo,
-                           int game_port, int challenge, bool fakeClient, bool tvClient,
+                           int game_port, int challenge, bool fakeClient,
                            unsigned int ticket_id, int session_id );
 void SV_DropClient( client_t *drop, int type, const char *format, ... );
 void SV_ExecuteClientThinks( int clientNum );

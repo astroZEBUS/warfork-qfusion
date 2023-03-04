@@ -299,9 +299,6 @@ void SV_Status_f( void )
 		else
 			Com_Printf( "%5i", cl->rate );
 #endif
-		Com_Printf( " " );
-		if( cl->mv )
-			Com_Printf( "MV" );
 		Com_Printf( "\n" );
 	}
 	Com_Printf( "\n" );
@@ -382,9 +379,6 @@ static void SV_CvarCheck_f( void )
 		for( i = 0, client = svs.clients; i < sv_maxclients->integer; i++, client++ )
 		{
 			if( !client->state )
-				continue;
-
-			if( client->tvclient )
 				continue;
 
 			SV_SendServerCommand( client, "cvarinfo \"%s\"", Cmd_Argv( 2 ) );

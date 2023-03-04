@@ -56,7 +56,6 @@ namespace WSWUI {
 		int				skilllevel;
 		bool			password;
 		bool			mm;
-		bool			tv;
 		unsigned int 	ping;
 		unsigned int 	ping_retries;
 		bool			favorite;

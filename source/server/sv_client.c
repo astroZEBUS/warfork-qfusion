@@ -63,7 +63,7 @@ void SV_ClientCloseDownload( client_t *client )
 * this is the only place a client_t is ever initialized
 */
 bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t *client, char *userinfo,
-						  int game_port, int challenge, bool fakeClient, bool tvClient,
+						  int game_port, int challenge, bool fakeClient,
 						  unsigned int ticket_id, int session_id )
 {
 	int i;
@@ -75,7 +75,7 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t
 
 	// give mm a chance to reject if the server is locked ready for mm
 	// must be called before ge->ClientConnect
-	// ch : rly ignore fakeClient and tvClient here?
+	// ch : rly ignore fakeClient here?
 	session_id = SV_MM_ClientConnect( address, userinfo, ticket_id, session_id );
 	if( !session_id )
 		return false;
@@ -85,7 +85,7 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t
 		Info_SetValueForKey( userinfo, "cl_mm_session", va("%d", session_id) );
 
 	// get the game a chance to reject this connection or modify the userinfo
-	if( !ge->ClientConnect( ent, userinfo, fakeClient, tvClient ) )
+	if( !ge->ClientConnect( ent, userinfo, fakeClient ) )
 		return false;
 
 
@@ -94,8 +94,8 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t
 	client->edict = ent;
 	client->challenge = challenge; // save challenge for checksumming
 
-	client->tvclient = tvClient;
-
+	client->mv = false;
+	
 	client->mm_session = session_id;
 	client->mm_ticket = ticket_id;
 
@@ -249,13 +249,6 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... )
 	if( drop->individual_socket )
 		NET_CloseSocket( &drop->socket );
 
-	if( drop->mv )
-	{
-		sv.num_mv_clients--;
-		drop->mv = false;
-	}
-
-	drop->tvclient = false;
 	drop->state = CS_ZOMBIE;    // become free in a few seconds
 	drop->name[0] = 0;
 }
@@ -882,44 +875,6 @@ static void SV_NoDelta_f( client_t *client )
 	client->lastframe = -1; // jal : I'm not sure about this. Seems like it's missing but...
 }
 
-/*
-* SV_Multiview_f
-*/
-static void SV_Multiview_f( client_t *client )
-{
-	bool mv;
-
-	mv = ( atoi( Cmd_Argv( 1 ) ) != 0 );
-
-	if( client->mv == mv )
-		return;
-	if( !client->tvclient )
-		return;		// allow MV connections only for TV
-
-	if( !ge->ClientMultiviewChanged( client->edict, mv ) )
-		return;
-
-	if( mv )
-	{
-		if( sv.num_mv_clients < sv_maxmvclients->integer )
-		{
-			client->mv = true;
-			sv.num_mv_clients++;
-		}
-		else
-		{
-			SV_AddGameCommand( client, "pr \"Can't multiview: maximum number of allowed multiview clients reached.\"" );
-			return;
-		}
-	}
-	else
-	{
-		assert( sv.num_mv_clients );
-		client->mv = false;
-		sv.num_mv_clients--;
-	}
-}
-
 typedef struct
 {
 	const char *name;
@@ -937,8 +892,6 @@ ucmd_t ucmds[] =
 	{ "usri", SV_UserinfoCommand_f },
 
 	{ "nodelta", SV_NoDelta_f },
-
-	{ "multiview", SV_Multiview_f },
 
 	// issued by hand at client consoles
 	{ "info", SV_ShowServerinfo_f },
@@ -1134,9 +1087,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg )
 	if( !msg )
 		return;
 
-	if (!client->tvclient) {
-		SV_UpdateActivity();
-	}
+	SV_UpdateActivity();
 
 	// only allow one move command
 	move_issued = false;

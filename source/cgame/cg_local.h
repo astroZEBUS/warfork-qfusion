@@ -459,7 +459,6 @@ typedef struct
 	bool demoPlaying;
 	bool demoTutorial;
 	bool pure;
-	bool tv, tvRequested;
 	bool gameMenuRequested;
 	int gameProtocol;
 	char demoExtension[MAX_QPATH];
@@ -932,7 +931,6 @@ extern cvar_t *cg_raceGhosts;
 extern cvar_t *cg_raceGhostsAlpha;
 extern cvar_t *cg_chatBeep;
 extern cvar_t *cg_chatFilter;
-extern cvar_t *cg_chatFilterTV;
 
 //force models
 extern cvar_t *cg_teamPLAYERSmodel;
@@ -983,7 +981,6 @@ void CG_RegisterCGameCommands( void );
 void CG_UnregisterCGameCommands( void );
 void CG_RegisterDemoCommands( void );
 void CG_UnregisterDemoCommands( void );
-void CG_UpdateTVServerString( void );
 void CG_AddAward( const char *str );
 void CG_OverrideWeapondef( int index, const char *cstring );
 

@@ -174,7 +174,7 @@ bool CG_PModelForCentity( centity_t *cent, pmodelinfo_t **pmodelinfo, struct ski
 	{
 		if( ( ( team == TEAM_ALPHA ) || ( team == TEAM_BETA ) || ( team == TEAM_PLAYERS ) ) &&
 			// Don't force the model for the local player including demos
-			( cgs.tv || !ISVIEWERENTITY( ( signed ) ( ownerNum ) ) ) )
+			( !ISVIEWERENTITY( ( signed ) ( ownerNum ) ) ) )
 		{
 			if( cgs.teamModelInfo[team] )
 			{

@@ -40,7 +40,6 @@ class VideoDataSource;
 class DemosDataSource;
 class ModsDataSource;
 class ModelsDataSource;
-class TVChannelsDataSource;
 class GameAjaxDataSource;
 
 class LevelShotFormatter;
@@ -85,8 +84,6 @@ public:
 	static void M_Menu_Tv_f( void );
 	static void M_Menu_DemoPlay_f( void );
 	static void M_Menu_Close_f( void );	
-	static void M_Menu_AddTVChannel_f( void );
-	static void M_Menu_RemoveTVChannel_f( void );
 
 	// pops all documents from stack and inserts a new one _if_ the quickMenuURL is different
 	static void M_Menu_Quick_f( void );
@@ -203,7 +200,6 @@ private:
 	DemosDataSource *demos;
 	ModsDataSource *mods;
 	ModelsDataSource *playerModels;
-	TVChannelsDataSource *tvchannels;
 	GameAjaxDataSource *gameajax;
 
 	UI_Navigation navigations[UI_NUM_CONTEXTS];

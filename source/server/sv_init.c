@@ -229,7 +229,6 @@ static void SV_ReloadPureList( void )
 void SV_SetServerConfigStrings( void )
 {
 	Q_snprintfz( sv.configstrings[CS_MAXCLIENTS], sizeof( sv.configstrings[0] ), "%i", sv_maxclients->integer );
-	Q_strncpyz( sv.configstrings[CS_TVSERVER], "0", sizeof( sv.configstrings[0] ) );
 	Q_strncpyz( sv.configstrings[CS_HOSTNAME], Cvar_String( "sv_hostname" ), sizeof( sv.configstrings[0] ) );
 	Q_strncpyz( sv.configstrings[CS_MODMANIFEST], Cvar_String( "sv_modmanifest" ), sizeof( sv.configstrings[0] ) );
 }
@@ -621,15 +620,6 @@ void SV_Map( const char *level, bool devmap )
 		if( svs.clients[i].state > CS_CONNECTING )
 		{
 			svs.clients[i].state = CS_CONNECTING;
-		}
-
-		// limit number of connected multiview clients
-		if( svs.clients[i].mv )
-		{
-			if( sv.num_mv_clients < sv_maxmvclients->integer )
-				sv.num_mv_clients++;
-			else
-				svs.clients[i].mv = false;
 		}
 
 		svs.clients[i].lastframe = -1;

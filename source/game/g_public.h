@@ -213,10 +213,9 @@ typedef struct
 	// each new level entered will cause a call to SpawnEntities
 	void ( *InitLevel )( char *mapname, char *entities, int entstrlen, unsigned int levelTime, unsigned int serverTime, unsigned int realTime );
 
-	bool ( *ClientConnect )( edict_t *ent, char *userinfo, bool fakeClient, bool tvClient );
+	bool ( *ClientConnect )( edict_t *ent, char *userinfo, bool fakeClient );
 	void ( *ClientBegin )( edict_t *ent );
 	void ( *ClientUserinfoChanged )( edict_t *ent, char *userinfo );
-	bool ( *ClientMultiviewChanged )( edict_t *ent, bool multiview );
 	void ( *ClientDisconnect )( edict_t *ent, const char *reason );
 	void ( *ClientCommand )( edict_t *ent );
 	void ( *ClientThink )( edict_t *ent, usercmd_t *cmd, int timeDelta );

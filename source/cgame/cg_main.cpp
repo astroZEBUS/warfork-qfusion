@@ -91,7 +91,6 @@ cvar_t *cg_raceGhosts;
 cvar_t *cg_raceGhostsAlpha;
 cvar_t *cg_chatBeep;
 cvar_t *cg_chatFilter;
-cvar_t *cg_chatFilterTV;
 
 cvar_t *cg_cartoonEffects;
 cvar_t *cg_cartoonHitEffect;
@@ -832,7 +831,6 @@ static void CG_RegisterVariables( void )
 
 	cg_chatBeep =		trap_Cvar_Get( "cg_chatBeep", "1", CVAR_ARCHIVE );
 	cg_chatFilter =		trap_Cvar_Get( "cg_chatFilter", "0", CVAR_ARCHIVE );
-	cg_chatFilterTV =	trap_Cvar_Get( "cg_chatFilterTV", "2", CVAR_ARCHIVE );
 
 	// developer cvars
 	developer =		trap_Cvar_Get( "developer", "0", CVAR_CHEAT );
@@ -1032,22 +1030,6 @@ void CG_Precache( void )
 }
 
 /*
-* CG_UpdateTVServerString
-*/
-void CG_UpdateTVServerString( void )
-{
-	// if we got the server settings configstring, update our local copy of the data
-	if( cgs.configStrings[CS_TVSERVER][0] )
-	{
-		char *settings = cgs.configStrings[CS_TVSERVER];
-
-		cgs.tv = atoi( COM_Parse( &settings ) ) == 0 ? false : true;
-		if( cgs.demoPlaying )
-			cgs.tv = false;		// ignore the TV bit in demos
-	}
-}
-
-/*
 * CG_RegisterConfigStrings
 */
 static void CG_RegisterConfigStrings( void )
@@ -1079,9 +1061,6 @@ static void CG_RegisterConfigStrings( void )
 		else if( i >= CS_PLAYERINFOS && i < CS_PLAYERINFOS + MAX_CLIENTS )
 			cgs.precacheTotal++;
 	}
-
-	// if we got the server settings configstring, update our local copy of the data
-	CG_UpdateTVServerString();
 
 	GS_SetGametypeName( cgs.configStrings[CS_GAMETYPENAME] );
 
@@ -1183,10 +1162,6 @@ void CG_Init( const char *serverName, unsigned int playerNum,
 
 	// whether to only allow pure files
 	cgs.pure = pure == true;
-
-	// whether we are connected to a tv-server
-	cgs.tv = false;
-	cgs.tvRequested = false;
 
 	// game protocol number
 	cgs.gameProtocol = protocol;

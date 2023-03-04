@@ -122,7 +122,6 @@ static const asEnumVal_t asConfigstringEnumVals[] =
 	ASLIB_ENUM_VAL( CS_MAPNAME ),
 	ASLIB_ENUM_VAL( CS_AUDIOTRACK ),
 	ASLIB_ENUM_VAL( CS_HOSTNAME ),
-	ASLIB_ENUM_VAL( CS_TVSERVER ),
 	ASLIB_ENUM_VAL( CS_SKYBOX ),
 	ASLIB_ENUM_VAL( CS_STATNUMS ),
 	ASLIB_ENUM_VAL( CS_POWERUPEFFECTS ),
@@ -2050,8 +2049,6 @@ static const asProperty_t gameclient_Properties[] =
 {
 	{ ASLIB_PROPERTY_DECL(Stats, stats), ASLIB_FOFFSET(gclient_t, level.stats) },
 	{ ASLIB_PROPERTY_DECL(const bool, connecting), ASLIB_FOFFSET(gclient_t, connecting) },
-	{ ASLIB_PROPERTY_DECL(const bool, multiview), ASLIB_FOFFSET(gclient_t, multiview) },
-	{ ASLIB_PROPERTY_DECL(const bool, tv), ASLIB_FOFFSET(gclient_t, isTV) },
 	{ ASLIB_PROPERTY_DECL(int, team), ASLIB_FOFFSET(gclient_t, team) },
 	{ ASLIB_PROPERTY_DECL(const int, hand), ASLIB_FOFFSET(gclient_t, hand) },
 	{ ASLIB_PROPERTY_DECL(bool, isOperator), ASLIB_FOFFSET(gclient_t, isoperator) },

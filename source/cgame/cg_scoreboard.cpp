@@ -978,7 +978,7 @@ void SCR_UpdatePlayerStatsMessage( const char *string )
 */
 void CG_ToggleScores_f( void )
 {
-	if( cgs.demoPlaying || cg.frame.multipov || cgs.tv )
+	if( cgs.demoPlaying || cg.frame.multipov )
 		cg.showScoreboard = !cg.showScoreboard;
 	else
 		trap_Cmd_ExecuteText( EXEC_NOW, "svscore" );
@@ -989,7 +989,7 @@ void CG_ToggleScores_f( void )
 */
 void CG_ScoresOn_f( void )
 {
-	if( cgs.demoPlaying || cg.frame.multipov || cgs.tv )
+	if( cgs.demoPlaying || cg.frame.multipov )
 		cg.showScoreboard = true;
 	else
 		trap_Cmd_ExecuteText( EXEC_NOW, "svscore 1" );
@@ -1000,7 +1000,7 @@ void CG_ScoresOn_f( void )
 */
 void CG_ScoresOff_f( void )
 {
-	if( cgs.demoPlaying || cg.frame.multipov || cgs.tv )
+	if( cgs.demoPlaying || cg.frame.multipov )
 		cg.showScoreboard = false;
 	else
 		trap_Cmd_ExecuteText( EXEC_NOW, "svscore 0" );
@@ -1017,7 +1017,7 @@ bool CG_IsScoreboardShown( void )
 	if( scoreboardString[0] != '&' ) // nothing to draw
 		return false;
 
-	if( cgs.demoPlaying || cg.frame.multipov || cgs.tv )
+	if( cgs.demoPlaying || cg.frame.multipov )
 		return cg.showScoreboard || ( GS_MatchState() > MATCH_STATE_PLAYTIME );
 
 	return ( cg.predictedPlayerState.stats[STAT_LAYOUTS] & STAT_LAYOUT_SCOREBOARD ) ? true : false;
