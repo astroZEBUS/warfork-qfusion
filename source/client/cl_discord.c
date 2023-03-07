@@ -548,17 +548,17 @@ static void CL_DiscordReady( const DiscordUser *user )
  * CL_PlayerStatus
  */
 
-static const char *CL_PlayerStatus( void )
+static const char *CL_PlayerStatus( snapshot_t *frame )
 {
 	if( cls.demo.playing ) {
 		return va( "demo" );
-	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
+	} else if( frame->playerState.stats[STAT_REALTEAM] == TEAM_SPECTATOR ) {
 		return va( "spectating" );
-	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_WARMUP ) {
+	} else if( frame->gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_WARMUP ) {
 		return va( "warmup" ); // Only applicable if you're playing.
-	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) {
+	} else if( frame->gameState.stats[GAMESTAT_FLAGS] & GAMESTAT_FLAG_PAUSED ) {
 		return va( "timeout" ); // Only applicable if you're playing.
-	} else if( cl.snapShots[cl.currentSnapNum & UPDATE_MASK].gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_POSTMATCH ) {
+	} else if( frame->gameState.stats[GAMESTAT_MATCHSTATE] == MATCH_STATE_POSTMATCH ) {
 		return va( "gameover" ); // Only applicable if you're playing.
 	} else
 		return va( "playing" );
@@ -577,6 +577,7 @@ void CL_UpdateDiscord( void )
 			cl_discord_state.next_update = now + 1000;
 
 			RichPresence presence = { 0 };
+			snapshot_t *frame = &cl.snapShots[cl.currentSnapNum & UPDATE_MASK];
 
 			char details[128];
 
@@ -593,8 +594,8 @@ void CL_UpdateDiscord( void )
 
 				strcpy( presence.largeImageKey, valid_map ? mapname : "unknownmap" ); // Levelshot
 				strcpy( presence.largeImageText, cl.configstrings[CS_HOSTNAME] );	  // Server name
-				strcpy( presence.smallImageKey, CL_PlayerStatus() );
-				strcpy( presence.smallImageText, CL_PlayerStatus() );
+				strcpy( presence.smallImageKey, CL_PlayerStatus( frame ) );
+				strcpy( presence.smallImageText, CL_PlayerStatus( frame ) );
 				strcpy( presence.state, valid_map ? mapname : "unknownmap" ); // Map name
 
 				// Gametype and Score (if available)
@@ -606,9 +607,33 @@ void CL_UpdateDiscord( void )
 					strcpy( presence.joinSecret, NET_AddressToString( &cls.serveraddress ) );
 				}
 
-				presence.partySize = cl.snapShots[cl.currentSnapNum & UPDATE_MASK].numplayers; // Total clients connected
-				presence.partyMax = atoi( cl.configstrings[CS_MAXCLIENTS] );				   // Max clients
+				presence.partySize = frame->numplayers;						 // Total clients connected
+				presence.partyMax = atoi( cl.configstrings[CS_MAXCLIENTS] ); // Max clients
 				presence.instance = true;
+
+                {
+					time_t unix_time;
+					time( &unix_time );
+
+					unsigned int cur_time = frame->serverTime;
+					unsigned int clock_override = frame->gameState.longstats[GAMELONG_CLOCKOVERRIDE];
+					unsigned int start_time = frame->gameState.longstats[GAMELONG_MATCHSTART];
+					unsigned int duration = frame->gameState.longstats[GAMELONG_MATCHDURATION];
+					unsigned int elapsed = cur_time - start_time;
+
+					if( clock_override != 0 ) {
+						// assume counting down, can't tell afaik
+						presence.endTimestamp = unix_time + clock_override / 1000;
+					} else if( duration == 0 ) {
+						// count up
+						presence.startTimestamp = unix_time - elapsed / 1000;
+					} else {
+						// count down
+						unsigned int remaining = duration - elapsed;
+						presence.endTimestamp = unix_time + remaining / 1000;
+					}
+				}
+
 			} else if( cls.state > CA_DISCONNECTED && cls.state < CA_ACTIVE ) {
 				strcpy( presence.largeImageKey, "connecting" );
 				strcpy( presence.state, "Attempting to fork!" );
