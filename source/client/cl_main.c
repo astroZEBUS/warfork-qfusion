@@ -64,6 +64,7 @@ cvar_t *m_yaw;
 //
 // userinfo
 //
+cvar_t *discord_id;
 cvar_t *info_password;
 cvar_t *rate;
 
@@ -2132,7 +2133,8 @@ static void CL_InitLocal( void )
 	//
 	// userinfo
 	//
-	info_password =		Cvar_Get( "password", "", CVAR_USERINFO );
+	discord_id = Cvar_Get( "discord_id", "", CVAR_USERINFO|CVAR_READONLY );
+	info_password = Cvar_Get( "password", "", CVAR_USERINFO );
 	rate =			Cvar_Get( "rate", "60000", CVAR_DEVELOPER ); // FIXME
 
 	name = Cvar_Get( "name", "", CVAR_USERINFO | CVAR_ARCHIVE );
