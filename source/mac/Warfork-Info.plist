@@ -7,7 +7,7 @@
 	<key>CFBundleIconFile</key>
 	<string>warfork.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.picmip.Warfork</string>
+	<string>com.warfork.Warfork</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleSignature</key>
@@ -18,7 +18,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>org.picmip.Warfork</string>
+			<string>com.warfork.Warfork</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>warfork</string>
@@ -28,6 +28,6 @@
 	<key>CFBundleVersion</key>
 	<string>1.0</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>forbidden.gg</string>
+	<string>Warfork.com</string>
 </dict>
 </plist>
