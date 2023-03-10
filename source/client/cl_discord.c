@@ -541,11 +541,17 @@ void UpdatePresenceIfChanged( RichPresence presence )
 static void CL_DiscordReady( const DiscordUser *user )
 {
 	const char *discord_id;
+	const char *discord_username;
+	const char *discord_discriminator;
 
 	discord_id = user->userId;
+	discord_username = user->username;
+	discord_discriminator = user->discriminator;
+
 	Com_Printf( "Loading Discord module... (%s)\n", discord_id );
 	Cvar_ForceSet( "discord_id", discord_id );
-	
+	Cvar_ForceSet( "discord_username", discord_username );
+	Cvar_ForceSet( "discord_discriminator", discord_discriminator );
 	cl_discord_state.initialized = true;
 }
 
