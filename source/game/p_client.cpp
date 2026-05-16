@@ -1082,6 +1082,7 @@ static void G_UpdatePlayerInfoString( int playerNum )
 	Info_SetValueForKey( playerString, "name", client->netname );
 	Info_SetValueForKey( playerString, "steam_id", va( "%llu", client->steamid ) );
 	Info_SetValueForKey( playerString, "hand", va( "%i", client->hand ) );
+	Info_SetValueForKey( playerString, "handicap", va( "%i", client->handicap ) );
 	Info_SetValueForKey( playerString, "color",
 		va( "%i %i %i", client->color[0], client->color[1], client->color[2] ) );
 

@@ -319,6 +319,8 @@ void CG_LoadClientInfo( cg_clientInfo_t *ci, const char *info, int client )
 	s = Info_ValueForKey( info, "m" );
 	ci->modelindex = s && s[0] ? atoi( s ) : 0;
 
+	s = Info_ValueForKey( info, "handicap" );
+	ci->handicap = s && s[0] ? atoi( s ) : 0;
 
 	s = Info_ValueForKey( info, "steam_id" );
 	if (s && atol(s)){

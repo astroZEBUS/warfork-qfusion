@@ -456,25 +456,39 @@ static const char *SCR_GetNextColumnLayout( const char **ptrlay, const char **pt
 	return token;
 }
 
-/**
- * Checks if the scoreboard column of the specific type needs to be skipped.
- *
- * @param type the column type
- * @return whether the column needs to be skipped
- */
-static bool SCR_SkipColumn( char type )
-{
-	switch( type )
-	{
-	case 'r':
-		return GS_MatchState() != MATCH_STATE_WARMUP;
-	case 'a':
-		return *cgs.configStrings[CS_USESTEAMAUTH] != '1';
-	}
 
+/*
+* CG_AnyPlayerHasHandicap
+* Returns true if at least one connected player has a non-zero handicap.
+*/
+static bool CG_AnyPlayerHasHandicap( void )
+{
+	int i;
+	for( i = 0; i < gs.maxclients; i++ ) {
+		if( cgs.clientInfo[i].handicap > 0 )
+			return true;
+	}
 	return false;
 }
-
+/*
+* SCR_SkipColumn
+* Checks if the scoreboard column of the specific type needs to be skipped.
+* @param type the column type
+* @return whether the column needs to be skipped
+*/
+static bool SCR_SkipColumn( char type )
+{
+    switch( type )
+    {
+    case 'r':
+        return GS_MatchState() != MATCH_STATE_WARMUP;
+    case 'a':
+        return *cgs.configStrings[CS_USESTEAMAUTH] != '1';
+    case 'h':
+        return !CG_AnyPlayerHasHandicap(); // new helper — see below
+    }
+    return false;
+}
 /*
 * SCR_DrawTeamTab
 */
@@ -794,22 +808,30 @@ static int SCR_DrawPlayerTab( const char **ptrptr, int team, int x, int y, int p
 				}
 			}
 			break;
-
+		case 'h': // is a handicap value (0-90), blank if zero
+			i = atoi( token );
+			if( i > 0 )
+				Q_snprintfz( string, sizeof( string ), "%i", i );
+			// else string[0] stays 0 (set above), rendering nothing
+			Vector4Copy( colorWhite, color );
+			break;
 		case 'r': // is a ready state tick that is hidden when not in warmup
 			if( atoi( token ) )
 				icon = CG_MediaShader( cgs.media.shaderVSayIcon[VSAY_YES] );
 			break;
 		case 'a': // is a steam avatar
-				int i = atoi( token );
-				if( i < 0 ) // negative numbers toggle transparency on
-				{
-					trans = true;
-					i = -1 - i;
-				}
-				if (i >= 0 && i < gs.maxclients && cgs.clientInfo[i].steamid)
-					avatar = cgs.clientInfo[i].avatar;
-				width = avatarsize;
+		{
+			int i = atoi( token );
+			if( i < 0 ) // negative numbers toggle transparency on
+			{
+				trans = true;
+				i = -1 - i;
+			}
+			if( i >= 0 && i < gs.maxclients && cgs.clientInfo[i].steamid )
+				avatar = cgs.clientInfo[i].avatar;
+			width = avatarsize;
 			break;
+		}
 		}
 
 		if( !width )

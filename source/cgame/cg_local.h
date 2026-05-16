@@ -374,6 +374,7 @@ typedef struct
 	int modelindex;
 	uint64_t steamid;
 	shader_s *avatar;
+	int handicap;
 } cg_clientInfo_t;
 
 #define MAX_ANGLES_KICKS 3
