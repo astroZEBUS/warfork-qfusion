@@ -2827,6 +2827,83 @@ static bool CG_LFuncDrawWeaponStrongAmmo( struct cg_layoutnode_s *commandnode, s
 	return true;
 }
 
+static void CG_DrawWeaponHotkeys( int x, int y, int offx, int offy, int fontsize, int align )
+{
+	int i, j, n;
+	float fj, fn;
+	int curx, cury, curwh, fs;
+	vec4_t color;
+	if( !cg_weaponlist || !cg_weaponlist->integer )
+		return;
+	if( fontsize > 0 )
+		fs = fontsize;
+	else
+		fs = 12;
+	curwh = (int)( fs * cgs.vidHeight / 600 );
+	n = 0;
+	for( i = 0; i < WEAP_TOTAL - 1; i++ ) {
+		if( CG_IsWeaponInList( WEAP_GUNBLADE + i ) )
+			n++;
+	}
+	VectorCopy( colorWhite, color );
+	for( i = j = 0; i < WEAP_TOTAL - 1; i++ ) {
+		if( !CG_IsWeaponInList( WEAP_GUNBLADE + i ) )
+			continue;
+		color[3] = CG_IsWeaponSelected( WEAP_GUNBLADE + i ) ? 1.0f : 0.5f;
+		fj = (float)j;
+		fn = (float)n;
+		curx = x + (int)( offx * ( fj - fn / 2.0f ) );
+		cury = y + (int)( offy * ( fj - fn / 2.0f ) );
+		gsitem_t *item = GS_FindItemByTag( WEAP_GUNBLADE + i );
+		if( item ) {
+			char cmd[64];
+			Q_snprintfz( cmd, sizeof( cmd ), "use %s", item->name );
+			const char *keyname = NULL;
+			char charbuf[2] = { 0, 0 };
+
+			// First pass: prefer letter keys (a-z)
+			for( int k = 0; k < 256; k++ ) {
+				const char *bind = trap_Key_GetBindingBuf( k );
+				if( bind && !Q_stricmp( bind, cmd ) ) {
+					if( k >= 'a' && k <= 'z' ) {
+						charbuf[0] = (char)( k - ( 'a' - 'A' ) );
+						keyname = charbuf;
+						break;
+					}
+				}
+			}
+
+			// Second pass: fall back to any key if no letter key found
+			if( !keyname ) {
+				for( int k = 0; k < 256; k++ ) {
+					const char *bind = trap_Key_GetBindingBuf( k );
+					if( bind && !Q_stricmp( bind, cmd ) ) {
+						keyname = trap_Key_KeynumToString( k );
+						break;
+					}
+				}
+			}
+
+			if( keyname )
+				trap_SCR_DrawString( curx, cury, align, keyname, CG_GetLayoutCursorFont(), color );
+		}
+		j++;
+	}
+}
+
+static bool CG_LFuncDrawWeaponHotkeys( struct cg_layoutnode_s *commandnode, struct cg_layoutnode_s *argumentnode, int numArguments )
+{
+	int offx, offy, fontsize;
+
+	offx = (int)( CG_GetNumericArg( &argumentnode ) * cgs.vidWidth/800 );
+	offy = (int)( CG_GetNumericArg( &argumentnode ) * cgs.vidHeight/600 );
+	fontsize = (int)CG_GetNumericArg( &argumentnode );
+
+	CG_DrawWeaponHotkeys( layout_cursor_x, layout_cursor_y, offx, offy, fontsize, layout_cursor_align );
+
+	return true;
+}
+
 static bool CG_LFuncDrawTeamInfo( struct cg_layoutnode_s *commandnode, struct cg_layoutnode_s *argumentnode, int numArguments )
 {
 	CG_DrawTeamInfo( layout_cursor_x, layout_cursor_y, layout_cursor_align, CG_GetLayoutCursorFont(), layout_cursor_color );
@@ -3634,6 +3711,15 @@ static const cg_layoutcommand_t cg_LayoutCommands[] =
 		NULL,
 		3,
 		"Draws the amount of strong ammo owned by the player,  arguments are offset x, offset y, fontsize",
+		false
+	},
+
+	{
+		"drawWeaponHotkeys",
+		CG_LFuncDrawWeaponHotkeys,
+		NULL,
+		3,
+		"Draws the key binding for each weapon. Arguments are offset x, offset y, fontsize",
 		false
 	},
 
