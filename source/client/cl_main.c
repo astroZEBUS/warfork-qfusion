@@ -1691,7 +1691,7 @@ void CL_RequestNextDownload( void )
 
 			if( failed )
 			{
-				Com_Error( ERR_DROP, message );
+				Com_Error( ERR_DROP, "%s", message );
 				return;
 			}
 		}

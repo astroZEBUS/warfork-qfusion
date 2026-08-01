@@ -3726,6 +3726,7 @@ static int FS_TouchGamePath( searchpath_t *basepath, const char *gamedir, bool i
 		for( i = 0; i < totalpaks; i++ )
 		{
 			// ignore already loaded pk3 files if updating
+			const char *shadowedby = NULL;
 			searchpath_t *compare = fs_searchpaths;
 			while( compare )
 			{
@@ -3736,6 +3737,9 @@ static int FS_TouchGamePath( searchpath_t *basepath, const char *gamedir, bool i
 					{
 						if( !Q_stricmp( compare->pack->filename, paknames[i] ) )
 							goto freename;
+						// same basename in another base path: whichever was added first wins
+						if( !shadowedby )
+							shadowedby = compare->pack->filename;
 					}
 				}
 				compare = compare->next;
@@ -3745,7 +3749,9 @@ static int FS_TouchGamePath( searchpath_t *basepath, const char *gamedir, bool i
 			{
 				// well, we couldn't find a suitable position for this pak file, probably because
 				// it's going to be overriden by a similarly named file elsewhere
-				continue;
+				Com_Printf( "Ignoring pk3 file %s (shadowed by %s)\n", paknames[i],
+					shadowedby ? shadowedby : "a pak with the same name" );
+				goto freename;
 			}
 
 			// deferred loading
@@ -3826,6 +3832,8 @@ static void FS_ReplaceDeferredPaks( void )
 			else {
 				// update prev pointers
 				search->pack = pak->deferred_pack;
+				Com_Printf( "Loaded pk3 file %s (checksum %u%s)\n", search->pack->filename,
+					search->pack->checksum, search->pack->pure ? ", pure" : "" );
 				FS_FreePakFile( pak );
 			}
 		}
@@ -4388,14 +4396,17 @@ void FS_Init( void )
 	if( fs_cdpath->string[0] )
 		FS_AddBasePath( fs_cdpath->string, true );
 
-	FS_AddBasePath( fs_basepath->string, true );
-	fs_root_searchpath = fs_basepaths;
-	fs_write_searchpath = fs_basepaths;
-
+	// Keep user data writable, but prefer installed files when both paths contain the same file.
 	if( homedir != NULL && fs_usehomedir->integer ) {
 		FS_AddBasePath( homedir, true );
 		fs_write_searchpath = fs_basepaths;
 	}
+
+	FS_AddBasePath( fs_basepath->string, true );
+	fs_root_searchpath = fs_basepaths;
+
+	if( homedir == NULL || !fs_usehomedir->integer )
+		fs_write_searchpath = fs_root_searchpath;
 
 	cachedir = Sys_FS_GetCacheDirectory();
 	if( cachedir )
