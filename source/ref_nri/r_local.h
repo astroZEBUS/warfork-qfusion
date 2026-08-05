@@ -136,6 +136,7 @@ typedef struct superLightStyle_s
 #define RF_LIGHTMAP				RF_BIT(8)
 #define RF_SOFT_PARTICLES		RF_BIT(9)
 #define RF_PORTAL_CAPTURE		RF_BIT(10)
+#define RF_NOSHADOWMAPS			RF_BIT(11)
 
 #define RF_CUBEMAPVIEW			( RF_ENVVIEW )
 #define RF_NONVIEWERREF			( RF_PORTALVIEW|RF_MIRRORVIEW|RF_ENVVIEW|RF_SHADOWMAPVIEW )
@@ -191,6 +192,7 @@ typedef struct portalSurface_s
 	vec3_t			mins, maxs, centre;
 	skyportal_t		*skyPortal;
 	int				portalmip;				// 0 = full res (memset clears to 0)
+	bool			portalnoshadows;		// no real-time shadows in this portal view
 	struct portal_fb_s* portalfbs[2];
 } portalSurface_t;
 

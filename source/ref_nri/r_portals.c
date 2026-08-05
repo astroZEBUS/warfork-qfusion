@@ -137,6 +137,7 @@ portalSurface_t *R_AddPortalSurface( const entity_t *ent, const mesh_t *mesh, co
 	ClearBounds( portalSurface->mins, portalSurface->maxs );
 	memset( portalSurface->portalfbs, 0, sizeof( portalSurface->portalfbs ) );
 	portalSurface->portalmip = shader->portalmip;
+	portalSurface->portalnoshadows = shader->portalnoshadows;
 
 	if( depthPortal ) {
 		rn.numDepthPortalSurfaces++;
@@ -532,6 +533,9 @@ setup_and_render:
 		if( prevFlipped )
 			rn.renderFlags |= RF_FLIPFRONTFACE;
 	}
+
+	if( portalSurface->portalnoshadows )
+		rn.renderFlags |= RF_NOSHADOWMAPS;
 
 	rn.refdef.rdflags &= ~( RDF_UNDERWATER|RDF_CROSSINGWATER|RDF_FLIPPED );
 

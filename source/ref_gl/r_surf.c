@@ -729,7 +729,7 @@ void R_DrawWorld( void )
 	}
 
 	// cull shadowmaps
-	if( !( rn.renderFlags & RF_ENVVIEW ) ) {
+	if( !( rn.renderFlags & ( RF_ENVVIEW|RF_NOSHADOWMAPS ) ) ) {
 		for( i = 0; i < rsc.numShadowGroups; i++ ) {
 			shadowGroup_t *grp = rsc.shadowGroups + i;
 			if( R_CullBox( grp->visMins, grp->visMaxs, clipFlags ) ) {
