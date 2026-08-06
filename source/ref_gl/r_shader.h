@@ -276,6 +276,7 @@ typedef struct shader_s
 	float				portalDistance;
 
 	int					portalmip;				// 0 = full res, 1 = half, 2 = quarter...
+	bool				portalnoshadows;		// disable real-time shadows in portal view
 
 	float				skyHeight;
 	image_t				*skyboxImages[6];
