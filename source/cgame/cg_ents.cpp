@@ -889,6 +889,7 @@ static void CG_AddGenericEnt( centity_t *cent )
 		}
 
 		if( cent->effects & EF_GHOST ) {
+			cent->renderfx |= RF_NOSHADOW;
 			cent->ent.renderfx |= RF_ALPHAHACK|RF_GREYSCALE;
 			cent->ent.shaderRGBA[3] = 100;
 
