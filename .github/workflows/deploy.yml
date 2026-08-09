@@ -45,7 +45,9 @@ jobs:
           path: artifacts
 
       - name: Install strip-nondeterminism
-        run: apt-get install strip-nondeterminism
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y strip-nondeterminism
 
       - name: Prepare Steam depot structure
         run: |
