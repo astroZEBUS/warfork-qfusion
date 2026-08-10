@@ -78,6 +78,8 @@ models/players/bigvic/bigvic_head
 {
 	nopicmip
 	cull front
+	glossIntensity 1.0
+	glossExponent 200
 	
 	{
 		material models/players/bigvic/vic_head_diff02.png models/players/bigvic/vic_head_norm.png models/players/bigvic/vic_head_gloss.png models/players/bigvic/vic_head_eye.png
@@ -88,6 +90,8 @@ models/players/bigvic/bigvic_torso
 {
 	nopicmip
 	cull front
+	glossIntensity 1.0
+	glossExponent 200
 
 	{
 		material models/players/bigvic/vic_torso_diff01.png models/players/bigvic/vic_torso_norm.png models/players/bigvic/vic_torso_gloss.png - models/players/bigvic/vic_torso_color.png
@@ -98,6 +102,8 @@ models/players/bigvic/bigvic_legs
 {
 	nopicmip
 	cull front
+	glossIntensity 1.0
+	glossExponent 200
 
 	{
 		material models/players/bigvic/vic_legs_diff01.png models/players/bigvic/vic_legs_norm.png models/players/bigvic/vic_legs_gloss.png - models/players/bigvic/vic_legs_color.png

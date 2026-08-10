@@ -35,6 +35,8 @@ models/players/padpork/default
 {
 	nopicmip
 	cull front
+	glossIntensity 0.2
+	glossExponent 200
 	
 	{
 		material models/players/padpork/padpork_diff.png models/players/padpork/padpork_norm.png models/players/padpork/padpork_gloss.png - models/players/padpork/padpork_mask.png

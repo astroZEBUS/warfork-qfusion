@@ -80,6 +80,8 @@ models/players/bobot/bobot_head
 {
 	nopicmip
 	cull front
+	glossIntensity 0.5
+	glossExponent 10
 	
 	{
 		material models/players/bobot/u_head_def.png models/players/bobot/u_head_norm.png models/players/bobot/u_head_gloss.png models/players/bobot/u_head_eye.png models/players/bobot/u_head_color.png
@@ -90,6 +92,8 @@ models/players/bobot/bobot_torso
 {
 	nopicmip
 	cull front
+	glossIntensity 1
+	glossExponent 100
 
 	{
 		material models/players/bobot/u_torso_def.png models/players/bobot/u_torso_norm.png models/players/bobot/u_torso_gloss.png models/players/bobot/u_torso_backlights.png models/players/bobot/u_torso_color.png
@@ -100,6 +104,8 @@ models/players/bobot/bobot_legs
 {
 	nopicmip
 	cull front
+	glossIntensity 1
+	glossExponent 100
 
 	{
 		material models/players/bobot/u_legs_def.png models/players/bobot/u_legs_norm.png models/players/bobot/u_legs_gloss.png - models/players/bobot/u_legs_color.png
