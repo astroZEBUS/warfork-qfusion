@@ -1583,6 +1583,7 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 	char *data;
 	bool isworld;
 	float gridsizef[3] = { 0, 0, 0 }, colorf[3] = { 0, 0, 0 }, ambientf = 0;
+	bool colorfSet = false;
 	char key[MAX_KEY], value[MAX_VALUE], *token;
 	float celcolorf[3] = { 0, 0, 0 };
 
@@ -1641,7 +1642,7 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 					ambientf = ia;
 				}
 			}
-			else if( !strcmp( key, "_color" ) )
+			else if( !strcmp( key, "_color" ) || ( !strcmp( key, "color" ) && !colorfSet ) )
 			{
 				n = sscanf( value, "%8f %8f %8f", &colorf[0], &colorf[1], &colorf[2] );
 				if( n != 3 )
@@ -1650,6 +1651,7 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 					sscanf( value, "%3i %3i %3i", &colori[0], &colori[1], &colori[2] );
 					VectorCopy( colori, colorf );
 				}
+				colorfSet = true;
 			}
 			else if( !strcmp( key, "_forceclear" ) )
 			{

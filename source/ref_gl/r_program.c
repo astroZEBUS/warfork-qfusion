@@ -77,6 +77,8 @@ typedef struct glsl_program_s
 
 					GlossFactors,
 
+					CameraAmbientFill,
+
 					OffsetMappingScale,
 					OutlineHeight,
 					OutlineCutOff,
@@ -666,6 +668,8 @@ static const glsl_feature_t glsl_features_material[] =
 	// doesn't make sense without APPLY_DIRECTIONAL_LIGHT
 	{ GLSL_SHADER_MATERIAL_DIRECTIONAL_LIGHT_MIX, "#define APPLY_DIRECTIONAL_LIGHT_MIX\n", "_mix" },
 	{ GLSL_SHADER_MATERIAL_DIRECTIONAL_LIGHT_FROM_NORMAL, "#define APPLY_DIRECTIONAL_LIGHT_FROM_NORMAL\n", "_normlight" },
+
+	{ GLSL_SHADER_MATERIAL_CAMERA_AMBIENT_FILL, "#define APPLY_CAMERA_AMBIENT_FILL\n", "_camamb" },
 
 	{ 0, NULL, NULL }
 };
@@ -2173,6 +2177,8 @@ void RP_UpdateDiffuseLightUniforms( int elem,
 		qglUniform3fARB( program->loc.LightAmbient, lightAmbient[0], lightAmbient[1], lightAmbient[2] );
 	if( program->loc.LightDiffuse >= 0 && lightDiffuse )
 		qglUniform3fARB( program->loc.LightDiffuse, lightDiffuse[0], lightDiffuse[1], lightDiffuse[2] );
+	if( program->loc.CameraAmbientFill >= 0 )
+		qglUniform1fARB( program->loc.CameraAmbientFill, r_lighting_overbrightmodels->value );
 }
 
 /*
@@ -2563,6 +2569,8 @@ static void RP_GetUniformLocations( glsl_program_t *program )
 	}
 
 	program->loc.GlossFactors = qglGetUniformLocationARB( program->object, "u_GlossFactors" );
+
+	program->loc.CameraAmbientFill = qglGetUniformLocationARB( program->object, "u_CameraAmbientFill" );
 
 	program->loc.OffsetMappingScale = qglGetUniformLocationARB( program->object, "u_OffsetMappingScale" );
 

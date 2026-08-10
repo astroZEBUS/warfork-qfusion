@@ -54,7 +54,7 @@ void main()
 	v_EyeVector = EyeVectorWorld * v_StrMatrix;
 #endif
 
-#if defined(NUM_DLIGHTS) || defined(APPLY_SPECULAR)
+#if defined(NUM_DLIGHTS) || defined(APPLY_SPECULAR) || defined(APPLY_CAMERA_AMBIENT_FILL)
 	v_Position = Position.xyz;
 #endif
 

@@ -45,6 +45,7 @@ layout(set = DESCRIPTOR_OBJECT_SET, binding = 0) uniform ObjectCB {
     vec3 entityOrigin;
     float isAlphaBlending;
     vec3 lightDir;
+    float cameraAmbientFill;
     vec3 entityDist;
     vec4 textureMatrix[2];
 } obj;

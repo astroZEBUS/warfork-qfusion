@@ -139,7 +139,7 @@ struct ObjectCB {
    struct vec3 entityOrigin;
    float isAlphaBlending;
    struct vec3 lightDir;
-   float pad0;
+   float cameraAmbientFill;
    struct vec3 entityDist;
    float pad1;
    float texutreMatrix[8];

@@ -332,6 +332,8 @@ static const glsl_feature_t glsl_features_material[] = { { GLSL_SHADER_COMMON_GR
 														 { GLSL_SHADER_MATERIAL_DIRECTIONAL_LIGHT_MIX, "#define APPLY_DIRECTIONAL_LIGHT_MIX\n", "_mix" },
 														 { GLSL_SHADER_MATERIAL_DIRECTIONAL_LIGHT_FROM_NORMAL, "#define APPLY_DIRECTIONAL_LIGHT_FROM_NORMAL\n", "_normlight" },
 
+														 { GLSL_SHADER_MATERIAL_CAMERA_AMBIENT_FILL, "#define APPLY_CAMERA_AMBIENT_FILL\n", "_camamb" },
+
 														 { 0, NULL, NULL } };
 
 static const glsl_feature_t glsl_features_distortion[] = { { GLSL_SHADER_COMMON_GREYSCALE, "#define APPLY_GREYSCALE\n", "_grey" },

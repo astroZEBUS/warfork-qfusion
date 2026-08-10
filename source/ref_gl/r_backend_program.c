@@ -1050,10 +1050,67 @@ static void RB_RenderMeshGLSL_Material( const shaderpass_t *pass, r_glslfeat_t p
 
 				if( e->flags & RF_MINLIGHT )
 				{
+					// lightgrid pre-filtering: guarantee a minimum ambient light and cap the
+					// ambient contribution, both expressed as a percentage of the max
+					// displayable light
+					if( !rb.noWorldLight && rsh.worldModel && rsh.worldBrushModel &&
+						rsh.worldBrushModel->lightgrid && rsh.worldBrushModel->numlightgridelems &&
+						( r_lighting_gridminambient->value > 0 || r_lighting_gridmaxambient->value > 0 ) )
+					{
+						// R_LightForOrigin already returned the grid values in display space
+						float maxLight = mapConfig.mapLightColorScale;
+						float lumAmb = ambient[0] * 0.299f + ambient[1] * 0.587f + ambient[2] * 0.114f;
+
+						if( r_lighting_gridminambient->value > 0 )
+						{
+							float targetMinAmbient = ( r_lighting_gridminambient->value / 100.0f ) * maxLight;
+
+							if( lumAmb < targetMinAmbient )
+							{
+								float missing = targetMinAmbient - lumAmb;
+								vec3_t gridHue;
+								vec3_t mapHue;
+								vec3_t mixHue;
+
+								float cfgLum = mapConfig.ambient[0] * 0.299f + mapConfig.ambient[1] * 0.587f + mapConfig.ambient[2] * 0.114f;
+								if( cfgLum > 0.001f )
+									VectorScale( mapConfig.ambient, 1.0f / cfgLum, mapHue );
+								else
+									VectorSet( mapHue, 1.0f, 1.0f, 1.0f );
+
+								// colorless cell: fall back to the map ambient hue, then white
+								if( lumAmb > 0.001f )
+									VectorScale( ambient, 1.0f / lumAmb, gridHue );
+								else
+									VectorCopy( mapHue, gridHue );
+
+								VectorSet( mixHue,
+									0.15f * gridHue[0] + 0.4f * mapHue[0] + 0.45f,
+									0.15f * gridHue[1] + 0.4f * mapHue[1] + 0.45f,
+									0.15f * gridHue[2] + 0.4f * mapHue[2] + 0.45f );
+
+								ambient[0] += mixHue[0] * missing;
+								ambient[1] += mixHue[1] * missing;
+								ambient[2] += mixHue[2] * missing;
+								lumAmb = targetMinAmbient;
+							}
+						}
+
+						if( r_lighting_gridmaxambient->value > 0 )
+						{
+							float maxAmbientAllowed = ( r_lighting_gridmaxambient->value / 100.0f ) * maxLight;
+							if( lumAmb > maxAmbientAllowed )
+								VectorScale( ambient, maxAmbientAllowed / lumAmb, ambient );
+						}
+					}
+
 					float minLight = rb.minLight;
 					if( ambient[0] <= minLight || ambient[1] <= minLight || ambient[2] <= minLight )
 						VectorSet( ambient, minLight, minLight, minLight );
 				}
+
+				if( ( e->flags & RF_MINLIGHT ) && r_lighting_overbrightmodels->value > 0 )
+					programFeatures |= GLSL_SHADER_MATERIAL_CAMERA_AMBIENT_FILL;
 
 				// rotate direction
 				Matrix3_TransformVector( e->axis, temp, lightDir );

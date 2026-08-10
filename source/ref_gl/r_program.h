@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 typedef uint64_t r_glslfeat_t;
 
 #define GLSL_BIT(x)							(1ULL << (x))
-#define GLSL_BITS_VERSION					17
+#define GLSL_BITS_VERSION					18
 
 #define DEFAULT_GLSL_MATERIAL_PROGRAM			"defaultMaterial"
 #define DEFAULT_GLSL_DISTORTION_PROGRAM			"defaultDistortion"
@@ -131,6 +131,7 @@ enum
 #define GLSL_SHADER_MATERIAL_ENTITY_DECAL_ADD	GLSL_BIT(48)
 #define GLSL_SHADER_MATERIAL_DIRECTIONAL_LIGHT_FROM_NORMAL	GLSL_BIT(49)
 #define GLSL_SHADER_MATERIAL_LIGHTMAP_ARRAYS	GLSL_BIT(50)
+#define GLSL_SHADER_MATERIAL_CAMERA_AMBIENT_FILL GLSL_BIT(51)
 
 // q3a shader features
 #define GLSL_SHADER_Q3_TC_GEN_ENV				GLSL_BIT(32)

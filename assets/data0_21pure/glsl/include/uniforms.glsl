@@ -18,6 +18,8 @@ uniform vec3 u_LightAmbient;
 uniform vec3 u_LightDiffuse;
 uniform vec3 u_LightDir;
 
+uniform float u_CameraAmbientFill;
+
 uniform vec2 u_BlendMix;
 
 uniform vec4 u_TextureMatrix[2];

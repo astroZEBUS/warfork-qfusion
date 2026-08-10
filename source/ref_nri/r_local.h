@@ -515,6 +515,9 @@ extern cvar_t *r_lighting_maxlmblocksize;
 extern cvar_t *r_lighting_vertexlight;
 extern cvar_t *r_lighting_maxglsldlights;
 extern cvar_t *r_lighting_grayscale;
+extern cvar_t *r_lighting_overbrightmodels;
+extern cvar_t *r_lighting_gridminambient;
+extern cvar_t *r_lighting_gridmaxambient;
 
 extern cvar_t *r_offsetmapping;
 extern cvar_t *r_offsetmapping_scale;

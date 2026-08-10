@@ -292,6 +292,16 @@ void main()
 	color.rgb += (vec3(texture(sampler2D(u_GlossTexture, u_GlossSampler), v_TexCoord)) * pass.glossIntensity) * pow(float(max(specularProduct, 0.0)), pass.glossExponent);
 #endif // APPLY_SPECULAR
 
+#ifdef APPLY_CAMERA_AMBIENT_FILL
+	// camera-direction ambient fill for grid-lit entity models with RF_MINLIGHT.
+	vec3 cameraFillDir = normalize(obj.entityDist - v_Position);
+	float cameraFillProduct = max(dot(surfaceNormalModelspace, cameraFillDir), 0.0);
+	color.rgb += obj.lightAmbient * obj.cameraAmbientFill * cameraFillProduct;
+#ifdef APPLY_SPECULAR
+	color.rgb += obj.lightAmbient * (obj.cameraAmbientFill * vec3(texture(sampler2D(u_GlossTexture, u_GlossSampler), v_TexCoord)) * pass.glossIntensity) * pow(cameraFillProduct, pass.glossExponent);
+#endif
+#endif
+
 #if defined(APPLY_BASETEX_ALPHA_ONLY) && !defined(APPLY_DRAWFLAT)
 	color = min(color, vec4(texture(sampler2D(u_BaseTexture,u_BaseSampler), v_TexCoord).a));
 #else

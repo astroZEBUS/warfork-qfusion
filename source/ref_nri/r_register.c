@@ -78,6 +78,10 @@ cvar_t *r_lighting_vertexlight;
 cvar_t *r_lighting_maxglsldlights;
 cvar_t *r_lighting_grayscale;
 
+cvar_t *r_lighting_overbrightmodels;
+cvar_t *r_lighting_gridminambient;
+cvar_t *r_lighting_gridmaxambient;
+
 cvar_t *r_offsetmapping;
 cvar_t *r_offsetmapping_scale;
 cvar_t *r_offsetmapping_reliefmapping;
@@ -186,6 +190,10 @@ static void R_Register( const char *screenshotsPrefix )
 	r_lighting_vertexlight = Cvar_Get( "r_lighting_vertexlight", "0", CVAR_ARCHIVE|CVAR_LATCH_VIDEO );
 	r_lighting_maxglsldlights = Cvar_Get( "r_lighting_maxglsldlights", "16", CVAR_ARCHIVE );
 	r_lighting_grayscale = Cvar_Get( "r_lighting_grayscale", "0", CVAR_ARCHIVE|CVAR_LATCH_VIDEO );
+
+	r_lighting_overbrightmodels = Cvar_Get( "r_lighting_overbrightmodels", "0.75", CVAR_ARCHIVE );
+	r_lighting_gridminambient = Cvar_Get( "r_lighting_gridminambient", "50", CVAR_ARCHIVE );
+	r_lighting_gridmaxambient = Cvar_Get( "r_lighting_gridmaxambient", "18", CVAR_ARCHIVE );
 
 	r_offsetmapping = Cvar_Get( "r_offsetmapping", "2", CVAR_ARCHIVE );
 	r_offsetmapping_scale = Cvar_Get( "r_offsetmapping_scale", "0.02", CVAR_ARCHIVE );
