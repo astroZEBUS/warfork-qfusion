@@ -1917,11 +1917,11 @@ static void Mod_Q2LoadEntities( const lump_t *l )
 			Q_strncpyz( value, token, sizeof( value ) );
 
 			// now that we have the key pair worked out...
-			if( !strcmp( key, "classname" ) ) {
+			if( !Q_stricmp( key, "classname" ) ) {
 				if( !strcmp( value, "worldspawn" ) ) {
 					isworld = true;
 				}
-			} else if( !strcmp( key, "sky" ) ) {
+			} else if( !Q_stricmp( key, "sky" ) ) {
 				if( key[0] ) {
 					Q_strncpyz( sky, "env/", sizeof( sky ) );
 					Q_strncatz( sky, token, sizeof( sky ) );

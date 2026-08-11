@@ -357,13 +357,13 @@ char *CM_LoadMapMessage( char *name, char *message, int size )
 			Q_strncpyz( value, token, sizeof( value ) );
 
 			// now that we have the key pair worked out...
-			if( !strcmp( key, "classname" ) )
+			if( !Q_stricmp( key, "classname" ) )
 			{
 				isworld = strcmp( value, "worldspawn" ) == 0;
 				if( *message )
 					break;
 			}
-			else if( !strcmp( key, "message" ) )
+			else if( !Q_stricmp( key, "message" ) )
 			{
 				Q_strncpyz( message, token, size );
 				if( isworld )

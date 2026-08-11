@@ -1621,18 +1621,18 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 			Q_strncpyz( value, token, sizeof( value ) );
 
 			// now that we have the key pair worked out...
-			if( !strcmp( key, "classname" ) )
+			if( !Q_stricmp( key, "classname" ) )
 			{
 				if( !strcmp( value, "worldspawn" ) )
 					isworld = true;
 			}
-			else if( !strcmp( key, "gridsize" ) )
+			else if( !Q_stricmp( key, "gridsize" ) )
 			{
 				int gridsizei[3] = { 0, 0, 0 };
 				sscanf( value, "%4i %4i %4i", &gridsizei[0], &gridsizei[1], &gridsizei[2] );
 				VectorCopy( gridsizei, gridsizef );
 			}
-			else if( !strcmp( key, "_ambient" ) || ( !strcmp( key, "ambient" ) && ambientf == 0.0f ) )
+			else if( !Q_stricmp( key, "_ambient" ) || ( !Q_stricmp( key, "ambient" ) && ambientf == 0.0f ) )
 			{
 				n = sscanf( value, "%8f", &ambientf );
 				if( n != 1 )
@@ -1642,7 +1642,7 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 					ambientf = ia;
 				}
 			}
-			else if( !strcmp( key, "_color" ) || ( !strcmp( key, "color" ) && !colorfSet ) )
+			else if( !Q_stricmp( key, "_color" ) || ( !Q_stricmp( key, "color" ) && !colorfSet ) )
 			{
 				n = sscanf( value, "%8f %8f %8f", &colorf[0], &colorf[1], &colorf[2] );
 				if( n != 3 )
@@ -1653,12 +1653,12 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 				}
 				colorfSet = true;
 			}
-			else if( !strcmp( key, "_forceclear" ) )
+			else if( !Q_stricmp( key, "_forceclear" ) )
 			{
 				if( atof( value ) != 0 )
 					mapConfig.forceClear = true;
 			}
-			else if( !strcmp( key, "_lightingIntensity" ) )
+			else if( !Q_stricmp( key, "_lightingIntensity" ) )
 			{
 				if( !r_fullbright->integer )
 				{
@@ -1666,7 +1666,7 @@ static void Mod_LoadEntities( const lump_t *l, vec3_t gridSize, vec3_t ambient, 
 					sscanf( value, "%8f", &mapConfig.lightingIntensity );
 				}
 			}
-			else if( !strcmp( key, "_outlinecolor" ) )
+			else if( !Q_stricmp( key, "_outlinecolor" ) )
 			{
 				n = sscanf( value, "%8f %8f %8f", &celcolorf[0], &celcolorf[1], &celcolorf[2] );
 				if( n != 3 )
