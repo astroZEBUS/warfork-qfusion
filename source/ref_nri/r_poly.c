@@ -127,6 +127,8 @@ static vec3_t fragmentOrigin;
 static vec3_t fragmentNormal;
 static float fragmentRadius;
 static float fragmentDiameterSquared;
+static vec3_t fragmentMins;
+static vec3_t fragmentMaxs;
 
 static int r_fragmentframecount;
 
@@ -307,6 +309,24 @@ static bool R_PlanarSurfClipFragment( msurface_t *surf, vec3_t normal )
 		VectorCopy( verts[elem[1]], poly[1] );
 		VectorCopy( verts[elem[2]], poly[2] );
 
+		// early cull TRISOUP meshes by their bounds. Planar surfaces don't need this.
+		if( surf->facetype == FACETYPE_TRISURF )
+		{
+			vec3_t triMins, triMaxs;
+
+			triMins[0] = min( poly[0][0], min( poly[1][0], poly[2][0] ) );
+			triMaxs[0] = max( poly[0][0], max( poly[1][0], poly[2][0] ) );
+			triMins[1] = min( poly[0][1], min( poly[1][1], poly[2][1] ) );
+			triMaxs[1] = max( poly[0][1], max( poly[1][1], poly[2][1] ) );
+			triMins[2] = min( poly[0][2], min( poly[1][2], poly[2][2] ) );
+			triMaxs[2] = max( poly[0][2], max( poly[1][2], poly[2][2] ) );
+
+			if( triMins[0] > fragmentMaxs[0] || triMaxs[0] < fragmentMins[0] ||
+				triMins[1] > fragmentMaxs[1] || triMaxs[1] < fragmentMins[1] ||
+				triMins[2] > fragmentMaxs[2] || triMaxs[2] < fragmentMins[2] )
+				continue; // triangle is completely outside the decal area
+		}
+
 		if( !planar )
 		{
 			// calculate two mostly perpendicular edge directions
@@ -396,7 +416,7 @@ bool R_SurfPotentiallyFragmented( const msurface_t *surf )
 		return false;
 	return ( ( surf->facetype == FACETYPE_PLANAR ) 
 		|| ( surf->facetype == FACETYPE_PATCH ) 
-		/* || (surf->facetype == FACETYPE_TRISURF)*/ );
+		|| ( surf->facetype == FACETYPE_TRISURF ) );
 }
 
 /*
@@ -512,6 +532,15 @@ int R_GetClippedFragments( const vec3_t origin, float radius, vec3_t axis[3],
 		VectorNegate( axis[i], fragmentPlanes[i*2+1].normal );
 		fragmentPlanes[i*2+1].dist = -d - radius0;
 		fragmentPlanes[i*2+1].type = PlaneTypeForNormal( fragmentPlanes[i*2+1].normal );
+	}
+
+	// build world-aligned bounds used to cull TRISOUP triangles in R_PlanarSurfClipFragment
+	for( i = 0; i < 3; i++ )
+	{
+		float half = 40.0f * fabs( axis[0][i] )
+			+ fragmentRadius * ( fabs( axis[1][i] ) + fabs( axis[2][i] ) );
+		fragmentMins[i] = fragmentOrigin[i] - half;
+		fragmentMaxs[i] = fragmentOrigin[i] + half;
 	}
 
 	R_RecursiveFragmentNode ();
