@@ -2273,6 +2273,9 @@ void CG_UpdateEntities( void )
 			CG_Error( "CG_UpdateEntities: unknown entity type %i", cent->type );
 			break;
 		}
+
+		if( cent->effects & EF_NOSHADOW )
+			cent->renderfx |= RF_NOSHADOW;
 	}
 
 	CG_SortItemTimers();

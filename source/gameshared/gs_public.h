@@ -1085,6 +1085,7 @@ enum
 #define EF_RACEGHOST				( 1<<17 )
 #define EF_OUTLINE					( 1<<18 )
 #define EF_GHOSTITEM				( 1<<19 )
+#define EF_NOSHADOW					( 1<<20 )
 
 //===============================================================
 // gs_weapons.c
