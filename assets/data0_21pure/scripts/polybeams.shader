@@ -1,10 +1,12 @@
 
+
 gfx/misc/electro
 {
 	cull none
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro.png
 		rgbgen vertex
@@ -19,6 +21,7 @@ gfx/misc/electro_alpha
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro.png
 		alphaGen vertex
@@ -33,6 +36,7 @@ gfx/misc/electro_beta
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro.png
 		alphaGen vertex
@@ -47,6 +51,7 @@ gfx/misc/electro2a
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro2a.png
 		rgbgen vertex
@@ -62,6 +67,7 @@ gfx/misc/electro2b
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro2b.png
 		rgbgen vertex
@@ -77,6 +83,7 @@ gfx/misc/electro2a_alpha
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro2a_team.png
 		rgbgen teamcolor 2
@@ -99,6 +106,7 @@ gfx/misc/electro2b_alpha
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro2b_team.png
 		rgbgen teamcolor 2
@@ -121,6 +129,7 @@ gfx/misc/instagun
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/instagun.png
 		alphaGen vertex
@@ -136,6 +145,7 @@ gfx/misc/electro2a_beta
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro2a_team.png
 		rgbgen teamcolor 3
@@ -159,6 +169,7 @@ gfx/misc/electro2b_beta
 	nopicmip
 	nomipmaps
 	deformVertexes autosprite2
+	sort 10
 	{
 		map gfx/misc/electro2b_team.png
 		rgbgen teamcolor 3
@@ -182,6 +193,7 @@ gfx/misc/laserbeam
 	cull none
 	deformVertexes autosprite2
 	softParticle
+	sort 10
 	{
 		map gfx/misc/laserbeam.png
 		rgbgen vertex
@@ -196,6 +208,7 @@ gfx/misc/laser
 	nomipmaps
 	cull none
 	deformVertexes autosprite2
+	sort 10
 	{
 		//clamp
 		map gfx/misc/laser.png
@@ -211,9 +224,9 @@ gfx/misc/testpoly
 	cull back
 	//deformVertexes wave 1000 sin 1 0 0 0
 	deformVertexes autosprite2
+	sort 10
 	{
 		map $whiteimage
 		blendFunc GL_ONE GL_ZERO
 	}
 }
-

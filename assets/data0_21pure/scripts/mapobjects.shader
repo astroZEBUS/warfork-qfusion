@@ -35,7 +35,7 @@ models_mapobjects_lamp_lamp
 
 	{
 		rgbgen vertex
-		material models/mapobjects/lamp/lamp.png
+		material models/mapobjects/lamp/lamp.png models/mapobjects/lamp/lamp_norm.png models/mapobjects/lamp/lamp_gloss.png
 	}
 
 	{
