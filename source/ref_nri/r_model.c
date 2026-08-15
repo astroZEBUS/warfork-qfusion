@@ -1084,8 +1084,33 @@ model_t *Mod_ForName( const char *name, bool crash )
 	//
 	// load the file
 	//
+	// prefer .iqm models over .md3, falling back when the preferred file is absent
+	const char *loadext = extension;
+	char loadname[MAX_QPATH];
 	uintptr_t group = 0;
-	modfilelen = R_LoadFileGroup( name, &group, (void **)&buf);
+
+	if( !extension[0] || !Q_stricmp( extension, "md3" ) || !Q_stricmp( extension, "iqm" ) )
+	{
+		Q_snprintfz( loadname, sizeof( loadname ), "%s.iqm", shortname );
+		modfilelen = R_LoadFileGroup( loadname, &group, (void **)&buf );
+		if( !buf )
+		{
+			group = 0;
+			Q_snprintfz( loadname, sizeof( loadname ), "%s.md3", shortname );
+			modfilelen = R_LoadFileGroup( loadname, &group, (void **)&buf );
+			loadext = "md3";
+		}
+		else
+		{
+			loadext = "iqm";
+		}
+	}
+	else
+	{
+		Q_strncpyz( loadname, name, sizeof( loadname ) );
+		modfilelen = R_LoadFileGroup( loadname, &group, (void **)&buf );
+	}
+
 	if( !buf && crash )
 		ri.Com_Error( ERR_DROP, "Mod_NumForName: %s not found", name );
 
@@ -1144,7 +1169,7 @@ model_t *Mod_ForName( const char *name, bool crash )
 	mod->numlods = 0;
 	for( i = 0; i < descr->maxLods; i++ )
 	{
-		Q_snprintfz( lodname, sizeof( lodname ), "%s_%i.%s", shortname, i+1, extension );
+		Q_snprintfz( lodname, sizeof( lodname ), "%s_%i.%s", shortname, i+1, loadext );
 		R_LoadFileGroup(lodname, &group, (void **)&buf );
 		if( !buf || strncmp( (const char *)buf, descr->header, descr->headerLen ) )
 			break;
