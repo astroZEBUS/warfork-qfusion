@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "../qcommon/steam.h"
 
-
 //============================================================================
 //
 //		CLIENT
@@ -280,8 +279,26 @@ CLIENT COMMAND EXECUTION
 */
 
 /*
+* SV_ClientAllowHttpDownloads
+*
+* Whether this client is able to reach our HTTP download server at all.
+*
+* A client that connected over the Steam relay can't turn
+* sv_http_port into an url. Unless sv_http_upstream_baseurl gives it something reachable
+* to use instead, it has to take its downloads over the game connection.
+*/
+static bool SV_ClientAllowHttpDownloads( const client_t *client )
+{
+	if( !SV_Web_Running() )
+		return false;
+	if( client->netchan.remoteAddress.type != NA_SDR )
+		return true;
+	return SV_Web_UpstreamBaseUrl()[0] != '\0';
+}
+
+/*
 * SV_New_f
-* 
+*
 * Sends the first message from the server to a connected client.
 * This will be sent on the initial connection and upon each server load.
 */
@@ -337,7 +354,7 @@ static void SV_New_f( client_t *client )
 			sv_bitflags |= SV_BITFLAGS_PURE;
 		if( client->reliable )
 			sv_bitflags |= SV_BITFLAGS_RELIABLE;
-		if( SV_Web_Running() )
+		if( SV_ClientAllowHttpDownloads( client ) )
 		{
 			const char *baseurl = SV_Web_UpstreamBaseUrl();
 			sv_bitflags |= SV_BITFLAGS_HTTP;
@@ -716,7 +733,7 @@ static void SV_BeginDownload_f( client_t *client )
 	char *url;
 	const char *errormsg = NULL;
 	bool allow, requestpak;
-	bool local_http = SV_Web_Running() && sv_uploads_http->integer != 0;
+	bool local_http = SV_ClientAllowHttpDownloads( client ) && sv_uploads_http->integer != 0;
 
 	requestpak = ( atoi( Cmd_Argv( 1 ) ) == 1 );
 	requestname = Cmd_Argv( 2 );

@@ -329,6 +329,39 @@ static size_t CL_WebDownloadReadCb( const void *buf, size_t numb, float percenta
 }
 
 /*
+* CL_CollapseUrlSlashes
+*
+* Collapses runs of '/' in the path of an url, in place. The "//" of the scheme and
+* everything from the query delimiter on are left alone.
+*
+* Only touches urls that carry a scheme: without one there's no way to tell a path from
+* a scheme-relative "//host/path", whose leading "//" must survive.
+*/
+static char *CL_CollapseUrlSlashes( char *url )
+{
+	char *src, *dst;
+
+	src = strstr( url, "://" );
+	if( !src )
+		return url;
+	src += 3;
+	dst = src;
+
+	while( *src && *src != '?' && *src != '#' ) {
+		*dst++ = *src++;
+		if( src[-1] == '/' ) {
+			while( *src == '/' )
+				src++;
+		}
+	}
+
+	if( dst != src )
+		memmove( dst, src, strlen( src ) + 1 );
+
+	return url;
+}
+
+/*
 * CL_InitServerDownload
 *
 * Handles server's initdownload message, starts web or server download if possible
@@ -576,6 +609,11 @@ static void CL_InitServerDownload( const char *filename, int size, unsigned chec
 			Q_urlencode_unsafechars( filename, fullurl + url_len + 1, alloc_size - url_len - 1 );
 		}
 
+		// either base url may or may not have come with a trailing slash, and we've just
+		// joined another one onto it. must happen before the session headers below, which
+		// match fullurl against cls.httpbaseurl to decide whether to attach them
+		CL_CollapseUrlSlashes( fullurl );
+
 		headers[0] = "Referer";
 		headers[1] = referer;
 
@@ -602,7 +640,7 @@ static void CL_InitDownload_f( void )
 	const char *url;
 	int size;
 	unsigned checksum;
-	bool allow_localhttpdownload;
+	bool allow_localhttpdownload, local_http;
 
 	// ignore download commands coming from demo files
 	if( cls.demo.playing )
@@ -612,8 +650,12 @@ static void CL_InitDownload_f( void )
 	filename = Cmd_Argv( 1 );
 	size = atoi( Cmd_Argv( 2 ) );
 	checksum = strtoul( Cmd_Argv( 3 ), NULL, 10 );
-	allow_localhttpdownload = ( atoi( Cmd_Argv( 4 ) ) != 0 ) && cls.httpbaseurl != NULL;
+	local_http = ( atoi( Cmd_Argv( 4 ) ) != 0 );
+	allow_localhttpdownload = local_http && cls.httpbaseurl != NULL;
 	url = Cmd_Argv( 5 );
+
+	if( local_http && !allow_localhttpdownload )
+		url = "";
 
 	CL_InitServerDownload( filename, size, checksum, allow_localhttpdownload, url, true );
 }
@@ -944,17 +986,23 @@ static void CL_ParseServerData( msg_t *msg )
 		else {
 			http_portnum = MSG_ReadShort( msg ) & 0xffff;
 			cls.httpaddress = cls.serveraddress;
-			if( cls.httpaddress.type == NA_IP6 ) {
-				cls.httpaddress.address.ipv6.port = BigShort( http_portnum );
-			} else {
-				cls.httpaddress.address.ipv4.port = BigShort( http_portnum );
-			}
+			NET_SetAddressPort( &cls.httpaddress, http_portnum );
 			if( http_portnum ) {
-				if( cls.httpaddress.type == NA_LOOPBACK ) {
-					cls.httpbaseurl = ZoneCopyString( va( "http://localhost:%hu/", http_portnum ) );
-				}
-				else {
-					cls.httpbaseurl = ZoneCopyString( va( "http://%s/", NET_AddressToString( &cls.httpaddress ) ) );
+				switch( cls.httpaddress.type ) {
+					case NA_LOOPBACK:
+						cls.httpbaseurl = ZoneCopyString( va( "http://localhost:%hu/", http_portnum ) );
+						break;
+					case NA_IP:
+					case NA_IP6:
+						cls.httpbaseurl = ZoneCopyString( va( "http://%s/", NET_AddressToString( &cls.httpaddress ) ) );
+						break;
+					default:
+						// the server's builtin HTTP server only listens on IP sockets, and a relayed
+						// address has no reachable host:port form, so downloads go over the game socket
+						Com_DPrintf( "Server offers HTTP downloads on port %hu, but %s is not an IP address."
+							" Downloading over the game connection instead.\n",
+							http_portnum, NET_AddressToString( &cls.httpaddress ) );
+						break;
 				}
 			}
 		}
