@@ -628,7 +628,7 @@ static void CL_InitServerDownload( const char *filename, int size, unsigned chec
 	cls.download.timeout = Sys_Milliseconds() + 3000;
 	cls.download.retries = 0;
 
-	CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, cls.download.offset ) );
+	CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, cls.download.offset ) );
 }
 
 /*
@@ -710,13 +710,13 @@ static void CL_RetryDownload( void )
 		Com_Printf( "Download timed out: %s\n", cls.download.name );
 
 		// let the server know we're done
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) );
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -2 ) );
 		CL_DownloadDone();
 	}
 	else
 	{
 		cls.download.timeout = Sys_Milliseconds() + 3000;
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, cls.download.offset ) );
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, cls.download.offset ) );
 	}
 }
 
@@ -784,7 +784,7 @@ void CL_DownloadCancel_f( void )
 	cls.download.cancelled = true;
 
 	if( !cls.download.web ) {
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) ); // let the server know we're done
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -2 ) ); // let the server know we're done
 		CL_DownloadDone();
 	}
 }
@@ -828,7 +828,7 @@ static void CL_ParseDownload( msg_t *msg )
 		return;
 	}
 
-	if( Q_stricmp( cls.download.name, svFilename ) )
+	if( Q_stricmp( cls.download.origname, svFilename ) )
 	{
 		Com_Printf( "Error: Download message for wrong file\n" );
 		msg->readcount += size;
@@ -867,7 +867,7 @@ static void CL_ParseDownload( msg_t *msg )
 		cls.download.timeout = Sys_Milliseconds() + 3000;
 		cls.download.retries = 0;
 
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, cls.download.offset ) );
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, cls.download.offset ) );
 	}
 	else
 	{
@@ -876,7 +876,7 @@ static void CL_ParseDownload( msg_t *msg )
 		CL_DownloadComplete();
 
 		// let the server know we're done
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -1 ) );
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -1 ) );
 
 		CL_DownloadDone();
 	}
