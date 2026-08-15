@@ -349,7 +349,7 @@ void BOT_Respawn( edict_t *self )
 
 	self->ai->statusUpdateTimeout = 0;
 	self->ai->changeweapon_timeout = 0;
-	self->ai->combatmovepush_timeout = 0;
+	self->ai->combatmovepush_timeout = ( self->r.client->team == TEAM_SPECTATOR ) ? level.time + (int)(8000 * random() ) : 0;
 	self->ai->state_combat_timeout = 0;
 	self->ai->enemyReactionDelay = 500 + random() * 300;
 	self->ai->last_attacker = NULL;

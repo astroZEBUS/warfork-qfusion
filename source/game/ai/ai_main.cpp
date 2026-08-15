@@ -52,7 +52,10 @@ void AI_InitLevel( void )
 	{
 		if( !ent->r.inuse || !ent->ai ) continue;
 		if( ent->r.svflags & SVF_FAKECLIENT && AI_GetType( ent->ai ) == AI_ISBOT )
+		{
 			game.numBots++;
+			ent->ai->combatmovepush_timeout = level.time + (int)(8000 * random() );
+		}
 	}
 
 	// set up weapon usage weights
@@ -574,6 +577,22 @@ void AI_Think( edict_t *self )
 	if( level.spawnedTimeStamp + 5000 > game.realtime || !level.canSpawnEntities )
 	{
 		self->nextThink = level.time + game.snapFrameTime;
+		return;
+	}
+
+	// periodic join attempts for spectator bots
+	if( self->r.client->team == TEAM_SPECTATOR )
+	{
+		if( level.time > self->ai->combatmovepush_timeout )
+		{
+			if( level.gametype.forceTeamBots != TEAM_SPECTATOR && level.gametype.numBots != 0 )
+				G_Teams_SetTeam( self, level.gametype.forceTeamBots );
+			else if( !self->r.client->queueTimeStamp )
+				G_Teams_JoinAnyTeam( self, false );
+
+			if( self->r.client->team == TEAM_SPECTATOR ) // couldn't join, retry later
+				self->ai->combatmovepush_timeout = level.time + (int)(8000 * random() );
+		}
 		return;
 	}
 
