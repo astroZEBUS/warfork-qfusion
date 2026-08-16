@@ -391,7 +391,7 @@ typedef struct mskmodel_s
 typedef enum { mod_bad = -1, mod_free, mod_brush, mod_alias, mod_skeletal } modtype_t;
 typedef void ( *mod_touch_t )( struct model_s *model );
 
-#define MOD_MAX_LODS	4
+#define MOD_MAX_LODS	9
 
 typedef struct model_s
 {

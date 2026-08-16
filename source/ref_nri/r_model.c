@@ -1171,12 +1171,26 @@ model_t *Mod_ForName( const char *name, bool crash )
 	{
 		Q_snprintfz( lodname, sizeof( lodname ), "%s_%i.%s", shortname, i+1, loadext );
 		R_LoadFileGroup(lodname, &group, (void **)&buf );
-		if( !buf || strncmp( (const char *)buf, descr->header, descr->headerLen ) )
-			break;
+
+		if( !buf )
+		{
+			mod->lods[i] = ( i == 0 ) ? mod : mod->lods[i-1];
+			continue;
+		}
+
+		if( strncmp( (const char *)buf, descr->header, descr->headerLen ) )
+		{
+			R_FreeFile( buf );
+			mod->lods[i] = ( i == 0 ) ? mod : mod->lods[i-1];
+			continue;
+		}
 
 		lod = mod->lods[i] = Mod_FindSlot( lodname );
 		if( lod->name && !strcmp( lod->name, lodname ) )
+		{
+			mod->numlods = i + 1;
 			continue;
+		}
 
 		lod->type = mod_bad;
 		lod->lodnum = i+1;
@@ -1189,7 +1203,7 @@ model_t *Mod_ForName( const char *name, bool crash )
 		descr->loader( lod, mod, buf, bspFormat );
 		R_FreeFile( buf );
 
-		mod->numlods++;
+		mod->numlods = i + 1;
 	}
 
 	return mod;
