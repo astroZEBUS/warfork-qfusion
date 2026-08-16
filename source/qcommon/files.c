@@ -1337,8 +1337,8 @@ static int _FS_FOpenFile( const char *filename, int *filenum, int mode, bool bas
 	{
 		if(group) {
 			if(*group == 0) {
-				(*group) = (uintptr_t)pakFile;
-			} else if(( *group ) != (uintptr_t)pakFile ) {
+				(*group) = (uintptr_t)search;
+			} else if(( *group ) != (uintptr_t)search ) {
 				Com_DPrintf( "FS_FOpen%sFile: Skipping not in the same group %s\n", (base ? "Base" : ""), filename );
 				goto error;
 			}
@@ -1362,8 +1362,8 @@ static int _FS_FOpenFile( const char *filename, int *filenum, int mode, bool bas
 	{
 		if(group) {
 			if(*group == 0) {
-				(*group) = (uintptr_t)vfsHandle;
-			} else if(( *group ) != (uintptr_t)vfsHandle) {
+				(*group) = (uintptr_t)search;
+			} else if(( *group ) != (uintptr_t)search) {
 				Com_DPrintf( "FS_FOpen%sFile: Skipping not in the same group %s\n", (base ? "Base" : ""), filename );
 				goto error;
 			}
