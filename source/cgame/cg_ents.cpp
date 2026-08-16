@@ -1373,13 +1373,8 @@ static void CG_AddItemEnt( centity_t *cent )
 			cent->ent.scale *= 1.40f;
 
 #ifdef DOWNSCALE_ITEMS // Ugly hack for release. Armor models are way too big
-		if( cent->item )
-		{
-			if( cent->item->type & IT_ARMOR )
-				cent->ent.scale *= 0.85f;
-			if( cent->item->tag == HEALTH_SMALL )
-				cent->ent.scale *= 0.85f;
-		}
+		if( cent->item && cent->item->tag == HEALTH_SMALL )
+			cent->ent.scale *= 0.85f;
 #endif
 
 		// flags are special
