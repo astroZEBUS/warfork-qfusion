@@ -393,7 +393,7 @@ void CL_Quit( void );
 
 void CL_UpdateClientCommandsToServer( msg_t *msg );
 void CL_AddReliableCommand( /*const*/ char *cmd );
-void CL_Netchan_Transmit( msg_t *msg );
+void CL_Netchan_Transmit( msg_t *msg, int flags );
 void CL_SendMessagesToServer( bool sendNow );
 void CL_RestartTimeDeltas( unsigned int newTimeDelta );
 void CL_AdjustServerTime( unsigned int gamemsec );

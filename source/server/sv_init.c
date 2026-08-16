@@ -508,7 +508,7 @@ static void SV_FinalMessage( const char *message, bool reconnect )
 
 			// send it twice
 			for( j = 0; j < 2; j++ )
-				SV_SendMessageToClient( cl, &tmpMessage );
+				SV_SendMessageToClient( cl, &tmpMessage, NET_SEND_UNRELIABLE );
 		}
 	}
 }
@@ -557,6 +557,24 @@ void SV_ShutdownGame( const char *finalmsg, bool reconnect )
 		NET_CloseSocket( &svs.socket_tcp6 );
 	}
 #endif
+
+	// SDR sockets carry a receive buffer that only NET_CloseSocket frees, and nothing else
+	// reclaims it once svs is torn down. this has to happen before the latched sv_maxclients
+	// changes under us, and before svs.clients is freed
+	if( svs.clients )
+	{
+		int i;
+		for( i = 0; i < sv_maxclients->integer; i++ )
+		{
+			if( svs.clients[i].individual_socket )
+				NET_CloseSocket( &svs.clients[i].socket );
+		}
+	}
+	for( int i = 0; i < MAX_INCOMING_CONNECTIONS; i++ )
+	{
+		if( svs.incomingp2p[i].socket.type == SOCKET_SDR )
+			NET_CloseSocket( &svs.incomingp2p[i].socket );
+	}
 
 	// get any latched variable changes (sv_maxclients, etc)
 	Cvar_GetLatchedVars( CVAR_LATCH );

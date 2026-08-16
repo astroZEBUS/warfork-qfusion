@@ -256,15 +256,30 @@ bool STEAMSHIM_active()
 	return result;
 }
 
+int STEAMSHIM_pollFd()
+{
+#ifdef _WIN32
+	// PipeType is a HANDLE from CreatePipe here, which select() cannot take. Callers fall back
+	// to polling STEAMSHIM_dispatch on a short timer.
+	return -1;
+#else
+	if( GPipeRead == NULLPIPE )
+		return -1;
+	return (int)GPipeRead;
+#endif
+}
+
 int STEAMSHIM_sendEVT( void *packet, uint32_t size )
 {
 	TracyCZoneN( ctx, "STEAMSHIM_sendEVT", 1 );
 	writeGuard.lock();
-	writePipe( GPipeWrite, &size, sizeof( uint32_t ) );
-	writePipe( GPipeWrite, (uint8_t *)packet, size );
+	// both halves have to land or the child loses framing on the stream, so a short write
+	// is reported rather than swallowed
+	int ok = writePipe( GPipeWrite, &size, sizeof( uint32_t ) );
+	ok = writePipe( GPipeWrite, (uint8_t *)packet, size ) && ok;
 	writeGuard.unlock();
 	TracyCZoneEnd( ctx );
-	return 0;
+	return ok ? 0 : -1;
 }
 
 int STEAMSHIM_sendRPC( void *packet, uint32_t size, void *self, STEAMSHIM_rpc_handle rpc, uint32_t *sync )
@@ -283,11 +298,11 @@ int STEAMSHIM_sendRPC( void *packet, uint32_t size, void *self, STEAMSHIM_rpc_ha
 	handle->cb = rpc;
 
 	writeGuard.lock();
-	writePipe( GPipeWrite, &size, sizeof( uint32_t ) );
-	writePipe( GPipeWrite, (uint8_t *)packet, size );
+	int ok = writePipe( GPipeWrite, &size, sizeof( uint32_t ) );
+	ok = writePipe( GPipeWrite, (uint8_t *)packet, size ) && ok;
 	writeGuard.unlock();
 	TracyCZoneEnd( ctx );
-	return 0;
+	return ok ? 0 : -1;
 }
 
 int STEAMSHIM_waitDispatchSync( uint32_t syncIndex )

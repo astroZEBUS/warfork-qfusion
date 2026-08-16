@@ -272,16 +272,20 @@ bool SV_SendClientsFragments( void )
 		if( !client->netchan.unsentFragments )
 			continue;
 
-		if( !Netchan_TransmitNextFragment( &client->netchan ) )
+		do
 		{
-			Com_Printf( "Error sending fragment to %s: %s\n", NET_AddressToString( &client->netchan.remoteAddress ),
-				NET_ErrorString() );
-			if( client->reliable )
-				SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending fragment: %s\n", NET_ErrorString() );
-			continue;
-		}
+			if( !Netchan_TransmitNextFragment( &client->netchan ) )
+			{
+				Com_Printf( "Error sending fragment to %s: %s\n", NET_AddressToString( &client->netchan.remoteAddress ),
+					NET_ErrorString() );
+				if( client->reliable )
+					SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending fragment: %s\n", NET_ErrorString() );
+				break;
+			}
 
-		sent = true;
+			sent = true;
+		}
+		while( client->state != CS_SPAWNED && client->netchan.unsentFragments );
 	}
 
 	return sent;
@@ -290,11 +294,12 @@ bool SV_SendClientsFragments( void )
 /*
 * SV_Netchan_Transmit
 */
-bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg )
+bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg, int flags )
 {
 	int zerror;
 
-	// if we got here with unsent fragments, fire them all now
+	// if we got here with unsent fragments, fire them all now. those keep the flags they were
+	// queued with, not ours
 	if( !Netchan_PushAllFragments( netchan ) )
 		return false;
 
@@ -307,7 +312,7 @@ bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg )
 		}
 	}
 
-	return Netchan_Transmit( netchan, msg );
+	return Netchan_Transmit( netchan, msg, flags );
 }
 
 /*
@@ -334,7 +339,7 @@ void SV_InitClientMessage( client_t *client, msg_t *msg, uint8_t *data, size_t s
 /*
 * SV_SendMessageToClient
 */
-bool SV_SendMessageToClient( client_t *client, msg_t *msg )
+bool SV_SendMessageToClient( client_t *client, msg_t *msg, int flags )
 {
 	assert( client );
 
@@ -343,7 +348,7 @@ bool SV_SendMessageToClient( client_t *client, msg_t *msg )
 
 	// transmit the message data
 	client->lastPacketSentTime = svs.realtime;
-	return SV_Netchan_Transmit( &client->netchan, msg );
+	return SV_Netchan_Transmit( &client->netchan, msg, flags );
 }
 
 /*
@@ -419,7 +424,7 @@ static bool SV_SendClientDatagram( client_t *client )
 
 	SV_WriteFrameSnapToClient( client, &tmpMessage );
 
-	return SV_SendMessageToClient( client, &tmpMessage );
+	return SV_SendMessageToClient( client, &tmpMessage, NET_SEND_UNRELIABLE );
 }
 
 /*
@@ -467,7 +472,11 @@ void SV_SendClientMessages( void )
 			{
 				SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 				SV_AddReliableCommandsToMessage( client, &tmpMessage );
-				if( !SV_SendMessageToClient( client, &tmpMessage ) )
+				// reliable, to match the download blocks this client may be receiving. the
+				// netchan discards anything that arrives out of sequence, so an unreliable
+				// packet overtaking a queued reliable one would cost the download block it
+				// jumped ahead of - the exact stall the reliable send is there to avoid
+				if( !SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE ) )
 				{
 					Com_Printf( "Error sending message to %s: %s\n", client->name, NET_ErrorString() );
 					if( client->reliable )

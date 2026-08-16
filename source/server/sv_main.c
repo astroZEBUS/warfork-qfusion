@@ -196,6 +196,9 @@ static void CL_RPC_cb_accept_connection( void *self, struct steam_rpc_pkt_s *pRe
 		req.cmd = RPC_SRV_P2P_DISCONNECT;
 		req.handle = inc->socket.steam_handle;
 		STEAMSHIM_sendRPC( &req, sizeof( struct p2p_disconnect_req_s ), NULL, NULL, NULL );
+		// open is still false here, so this only frees the receive ring and clears the
+		// handle - it will not repeat the disconnect RPC just sent above
+		NET_CloseSocket( &inc->socket );
 		inc->active = false;
 		return;
 	}
@@ -203,9 +206,127 @@ static void CL_RPC_cb_accept_connection( void *self, struct steam_rpc_pkt_s *pRe
 	inc->socket.connected = true;
 }
 
+/*
+* SV_EVT_cb_recv_messages
+*
+* Stages inbound relay datagrams into the receive ring of whichever socket owns the connection.
+*
+* CS_FREE and CS_ZOMBIE clients are skipped. Nothing drains a zombie's socket, so staging into
+* one would just grow a ring until the slot is reaped.
+*/
+static void SV_EVT_cb_recv_messages( void *self, struct steam_evt_pkt_s *pkt )
+{
+	struct recv_messages_evt_s *evt = &pkt->recv_messages;
+
+	if( evt->handle == 0 )
+		return;
+
+	// svs.clients is freed by SV_ShutdownGame while this subscription is still live
+	if( svs.clients )
+	{
+		for( int i = 0; i < sv_maxclients->integer; i++ )
+		{
+			client_t *cl = &svs.clients[i];
+
+			if( cl->state == CS_FREE || cl->state == CS_ZOMBIE )
+				continue;
+			if( !cl->individual_socket || cl->socket.type != SOCKET_SDR )
+				continue;
+			if( cl->socket.steam_handle != evt->handle )
+				continue;
+
+			NET_SDR_StagePacket( &cl->socket, evt );
+			return;
+		}
+	}
+
+	// connections still in the handshake, before SVC_DirectConnect promotes them
+	for( int i = 0; i < MAX_INCOMING_CONNECTIONS; i++ )
+	{
+		incoming_t *inc = &svs.incomingp2p[i];
+
+		if( !inc->active || inc->socket.type != SOCKET_SDR )
+			continue;
+		if( inc->socket.steam_handle != evt->handle )
+			continue;
+
+		NET_SDR_StagePacket( &inc->socket, evt );
+		return;
+	}
+}
+
+/*
+* SV_SDR_ConnectionLost
+*
+* The relay connection behind handle is gone. Reclaims whichever socket owns it, so a dead
+* connection does not have to wait out sv_timeout - and, for a slot still in the handshake, does
+* not sit active forever holding a receive ring.
+*/
+static void SV_SDR_ConnectionLost( uint32_t handle )
+{
+	if( handle == 0 )
+		return;
+
+	// svs.clients is freed by SV_ShutdownGame while this subscription is still live
+	if( svs.clients )
+	{
+		for( int i = 0; i < sv_maxclients->integer; i++ )
+		{
+			client_t *cl = &svs.clients[i];
+
+			if( cl->state == CS_FREE || cl->state == CS_ZOMBIE )
+				continue;
+			if( !cl->individual_socket || cl->socket.type != SOCKET_SDR )
+				continue;
+			if( cl->socket.steam_handle != handle )
+				continue;
+
+			// closes the socket for us on the way out
+			SV_DropClient( cl, DROP_TYPE_GENERAL, "%s", "Connection closed by peer" );
+			return;
+		}
+	}
+
+	for( int i = 0; i < MAX_INCOMING_CONNECTIONS; i++ )
+	{
+		incoming_t *inc = &svs.incomingp2p[i];
+
+		if( !inc->active || inc->socket.type != SOCKET_SDR )
+			continue;
+		if( inc->socket.steam_handle != handle )
+			continue;
+
+		NET_CloseSocket( &inc->socket );
+		inc->active = false;
+		return;
+	}
+}
+
 static void CL_EVT_cb_connect_status_response( void *self, struct steam_evt_pkt_s *pkt )
 {
 	struct p2p_net_connection_changed_evt_s *evt = &pkt->p2p_net_connection_changed;
+
+	// a connection we were using has gone away. nothing else notices this - the shim only
+	// reports it here - so without this a dead relay client lingers until the sv_timeout sweep,
+	// and a slot still in the handshake is never reclaimed at all
+	switch( evt->state )
+	{
+	case STEAMSHIM_ESteamNetworkingConnectionState_None:
+	case STEAMSHIM_ESteamNetworkingConnectionState_ClosedByPeer:
+	case STEAMSHIM_ESteamNetworkingConnectionState_ProblemDetectedLocally:
+	case STEAMSHIM_ESteamNetworkingConnectionState_FinWait:
+	case STEAMSHIM_ESteamNetworkingConnectionState_Dead:
+		// None is also the old state of a brand new connection, so only treat it as a
+		// teardown when the connection had actually got somewhere
+		if( evt->state == STEAMSHIM_ESteamNetworkingConnectionState_None
+			&& evt->oldState == STEAMSHIM_ESteamNetworkingConnectionState_None )
+			break;
+		SV_SDR_ConnectionLost( evt->hConn );
+		return;
+	default:
+		break;
+	}
+
 	if( evt->listenSocket == svs.steam_listen_socket && evt->oldState == STEAMSHIM_ESteamNetworkingConnectionState_None && evt->state == STEAMSHIM_ESteamNetworkingConnectionState_Connecting ) {
 		int free = -1;
 		for( int i = 0; i < MAX_INCOMING_CONNECTIONS; i++ ) {
@@ -232,6 +353,10 @@ static void CL_EVT_cb_connect_status_response( void *self, struct steam_evt_pkt_
 		inc->socket.server = true;
 		inc->socket.open = false;
 		inc->socket.connected = false;
+		// sole initializer of the ring for a freshly claimed slot: every path out of an
+		// active slot goes through NET_CloseSocket or the handoff in SV_ClientConnect,
+		// both of which leave buffer NULL
+		inc->socket.buffer = NULL;
 
 		struct p2p_accept_connect_req_s req;
 		req.cmd = RPC_SRV_P2P_ACCEPT_CONNECTION;
@@ -447,8 +572,13 @@ static void SV_ReadPackets( void )
 		if( !cl->individual_socket )
 			continue;
 
-		// not while, we only handle one packet per client at a time here
-		if( ( ret = NET_GetPacket( cl->netchan.socket, &address, &msg ) ) != 0 )
+		// drain the whole backlog: the shim hands us up to SDR_MAX_REQUESTED_PACKETS per
+		// connection per dispatch, so taking one a frame throttles the client to the server
+		// frame rate. the state and open tests have to be re-evaluated every iteration -
+		// SV_ParseClientMessage can reach SV_DropClient, which closes an individual socket
+		// out from under us
+		while( cl->state != CS_ZOMBIE && cl->state != CS_FREE && cl->netchan.socket->open
+			&& ( ret = NET_GetPacket( cl->netchan.socket, &address, &msg ) ) != 0 )
 		{
 			if( ret == -1 )
 			{
@@ -456,34 +586,39 @@ static void SV_ReadPackets( void )
 					NET_ErrorString() );
 				if( cl->reliable )
 					SV_DropClient( cl, DROP_TYPE_GENERAL, "Error receiving packet: %s", NET_ErrorString() );
+				break;
 			}
-			else
+
+			if( SV_ProcessPacket( &cl->netchan, &msg ) )
 			{
-				if( SV_ProcessPacket( &cl->netchan, &msg ) )
-				{
-					// this is a valid, sequenced packet, so process it
-					cl->lastPacketReceivedTime = svs.realtime;
-					SV_ParseClientMessage( cl, &msg );
-				}
+				// this is a valid, sequenced packet, so process it
+				cl->lastPacketReceivedTime = svs.realtime;
+				SV_ParseClientMessage( cl, &msg );
 			}
 		}
 	}
 
-  // sdr packets without a connection
+  // sdr packets without a connection. same drain-the-backlog treatment as the loop above,
+  // and the same need to re-test every iteration: both the error path and SV_ConnectionlessPacket
+  // can close this socket and clear the slot
   for( int i = 0; i < MAX_INCOMING_CONNECTIONS; i++ ) {
-      if( !svs.incomingp2p[i].active || !svs.incomingp2p[i].socket.connected )
-          continue;
-      ret = NET_GetPacket( &svs.incomingp2p[i].socket, &address, &msg );
-      if( ret == -1 ) {
-          Com_Printf( "NET_GetPacket: Error: %s\n", NET_ErrorString() );
-          NET_CloseSocket( &svs.incomingp2p[i].socket );
-          svs.incomingp2p[i].active = false;
-      } else if( ret == 1 ) {
+      while( svs.incomingp2p[i].active && svs.incomingp2p[i].socket.connected
+          && svs.incomingp2p[i].socket.open ) {
+          ret = NET_GetPacket( &svs.incomingp2p[i].socket, &address, &msg );
+          if( ret == 0 )
+              break;
+          if( ret == -1 ) {
+              Com_Printf( "NET_GetPacket: Error: %s\n", NET_ErrorString() );
+              NET_CloseSocket( &svs.incomingp2p[i].socket );
+              svs.incomingp2p[i].active = false;
+              break;
+          }
+
           if( *(int *)msg.data != -1 ) {
               Com_Printf( "Sequence packet without connection\n" );
               NET_CloseSocket( &svs.incomingp2p[i].socket );
               svs.incomingp2p[i].active = false;
-              continue;
+              break;
           }
 
           SV_ConnectionlessPacket( &svs.incomingp2p[i].socket, &address, &msg );
@@ -522,6 +657,19 @@ static void SV_CheckTimeouts( void )
 		}
 	}
 #endif
+
+	// timeout incoming p2p connections. a peer that opens a relay connection and never sends
+	// getchallenge would otherwise hold its slot forever, along with a receive ring that grows
+	// for as long as it keeps talking
+	for( i = 0; i < MAX_INCOMING_CONNECTIONS; i++ )
+	{
+		if( svs.incomingp2p[i].active && svs.incomingp2p[i].time + 1000 * 15 < svs.realtime )
+		{
+			Com_Printf( "Incoming P2P connection from %s timed out\n", NET_AddressToString( &svs.incomingp2p[i].address ) );
+			NET_CloseSocket( &svs.incomingp2p[i].socket );
+			svs.incomingp2p[i].active = false;
+		}
+	}
 
 	// timeout clients
 	for( i = 0, cl = svs.clients; i < sv_maxclients->integer; i++, cl++ )
@@ -596,6 +744,7 @@ static void SV_CheckLatchedUserinfoChanges( void )
 //#define WORLDFRAMETIME 25 // 40fps
 //#define WORLDFRAMETIME 20 // 50fps
 #define WORLDFRAMETIME 16 // 62.5fps
+
 /*
 * SV_RunGameFrame
 */
@@ -634,7 +783,8 @@ static bool SV_RunGameFrame( int msec )
 		if( sleeptime > 0 )
 		{
 			socket_t *sockets [] = { &svs.socket_udp, &svs.socket_udp6 };
-			socket_t *opened_sockets [sizeof( sockets ) / sizeof( sockets[0] ) + 1 ];
+			socket_t *opened_sockets [sizeof( sockets ) / sizeof( sockets[0] )
+				+ MAX_CLIENTS + MAX_INCOMING_CONNECTIONS + 1 ];
 			size_t sock_ind, open_ind;
 
 			// Pass only the opened sockets to the sleep function
@@ -647,6 +797,31 @@ static bool SV_RunGameFrame( int msec )
 					opened_sockets[open_ind] = sock;
 					open_ind++;
 				}
+			}
+
+			// SDR sockets go in too. They have no descriptor of their own, so NET_Sleep waits
+			// on the steam shim pipe on their behalf - a relay client wakes the server the
+			// same way a UDP one does, whether it is downloading a map or already playing.
+			if( svs.clients )
+			{
+				for( int i = 0; i < sv_maxclients->integer; i++ )
+				{
+					client_t *cl = &svs.clients[i];
+
+					if( cl->state == CS_FREE || cl->state == CS_ZOMBIE )
+						continue;
+					if( !cl->individual_socket || cl->socket.type != SOCKET_SDR || !cl->socket.open )
+						continue;
+					opened_sockets[open_ind++] = &cl->socket;
+				}
+			}
+			for( int i = 0; i < MAX_INCOMING_CONNECTIONS; i++ )
+			{
+				incoming_t *inc = &svs.incomingp2p[i];
+
+				if( !inc->active || inc->socket.type != SOCKET_SDR )
+					continue;
+				opened_sockets[open_ind++] = &inc->socket;
 			}
 			opened_sockets[open_ind] = NULL;
 
@@ -1117,6 +1292,7 @@ void SV_Init( void )
 	
 	STEAMSHIM_subscribeEvent( EVT_SRV_P2P_POLICY_RESPONSE, NULL, CL_EVT_cb_policy_response );
 	STEAMSHIM_subscribeEvent( EVT_SRV_P2P_CONNECTION_CHANGED, NULL, CL_EVT_cb_connect_status_response );
+	STEAMSHIM_subscribeEvent( EVT_SRV_P2P_RECV_MESSAGES, NULL, SV_EVT_cb_recv_messages );
 
 	// Register net callback
 	sv_initialized = true;
@@ -1134,6 +1310,7 @@ void SV_Shutdown( const char *finalmsg )
 
 	STEAMSHIM_unsubscribeEvent(EVT_SRV_P2P_POLICY_RESPONSE,CL_EVT_cb_policy_response);
 	STEAMSHIM_unsubscribeEvent(EVT_SRV_P2P_CONNECTION_CHANGED, CL_EVT_cb_connect_status_response);
+	STEAMSHIM_unsubscribeEvent(EVT_SRV_P2P_RECV_MESSAGES, SV_EVT_cb_recv_messages);
 
 	sv_initialized = false;
 

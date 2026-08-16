@@ -507,6 +507,7 @@ STEAM_EVT( recv_messages )
 	uint64_t steamID;
 	uint32_t handle;
 	int      count;
+	uint32_t total;	// bytes in buffer; sum of the messageinfo counts
 	struct {
 		int count;
 	} messageinfo[SDR_MAX_REQUESTED_PACKETS];
@@ -542,6 +543,13 @@ struct steam_packet_buf {
 		uint8_t buffer[STEAM_PACKED_RESERVE_SIZE];
 	};
 };
+
+// Largest payload that will actually survive a trip to the child. The child reads a parent packet
+// into a fixed STEAM_PACKED_RESERVE_SIZE buffer, so a send_message_req_s has to fit inside it,
+// header and length prefix included. This is well below SDR_MAX_MESSAGE_SIZE - that one bounds
+// what the relay itself will carry, and is the weaker of the two constraints.
+#define SDR_MAX_SENDABLE_MESSAGE_SIZE \
+	( STEAM_PACKED_RESERVE_SIZE - sizeof( uint32_t ) - sizeof( struct send_message_req_s ) )
 
 #pragma pack( pop )
 

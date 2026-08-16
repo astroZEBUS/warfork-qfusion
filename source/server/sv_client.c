@@ -121,6 +121,9 @@ bool SV_ClientConnect( const socket_t *socket, const netadr_t *address, client_t
 				client->reliable = false;
 				client->individual_socket = true;
 				client->socket = *socket;
+				// the copy takes over the receive buffer, so the incoming slot it came from
+				// must forget it - two socket_t holding one allocation is a double free
+				( (socket_t *)socket )->buffer = NULL;
 				break;
 
 		default:
@@ -226,7 +229,7 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... )
 		SV_SendServerCommand( drop, "disconnect %i \"%s\"", type, string );
 		SV_AddReliableCommandsToMessage( drop, &tmpMessage );
 
-		SV_SendMessageToClient( drop, &tmpMessage );
+		SV_SendMessageToClient( drop, &tmpMessage, NET_SEND_UNRELIABLE );
 		Netchan_PushAllFragments( &drop->netchan );
 
 		if( drop->state >= CS_CONNECTED )
@@ -389,7 +392,10 @@ static void SV_New_f( client_t *client )
 
 	SV_ClientResetCommandBuffers( client );
 
-	SV_SendMessageToClient( client, &tmpMessage );
+	// everything sent to a client that has not spawned yet goes out reliable, so the connect
+	// and download phase stays on a single ordered lane. an unreliable packet mixed in here
+	// can overtake a queued reliable one, and the netchan discards whatever it overtakes
+	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
 	Netchan_PushAllFragments( &client->netchan );
 
 
@@ -507,7 +513,7 @@ static void SV_Baselines_f( client_t *client )
 		SV_SendServerCommand( client, "cmd baselines %i %i", svs.spawncount, start );
 
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
-	SV_SendMessageToClient( client, &tmpMessage );
+	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
 }
 
 /*
@@ -562,8 +568,12 @@ static void SV_Begin_f( client_t *client )
 static void SV_NextDownload_f( client_t *client )
 {
 	int blocksize;
+	int headroom;
 	int offset;
-	uint8_t data[FRAGMENT_SIZE*2];
+	// the block goes out as one netchan message, so this has to leave room under MAX_MSGLEN
+	// for the svc_download header, the filename and any pending reliable commands. it is also
+	// what the client reassembles into fragmentBuffer[MAX_MSGLEN]
+	uint8_t data[FRAGMENT_SIZE*8];
 
 	if( !client->download.name )
 	{
@@ -615,10 +625,28 @@ static void SV_NextDownload_f( client_t *client )
 	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
 
+	// whatever is left in tmpMessage after the reliable commands, minus the svc_download
+	// header: a byte, the filename, and the two longs
+	headroom = (int)( tmpMessage.maxsize - tmpMessage.cursize )
+		- (int)( 1 + strlen( client->download.name ) + 1 + 4 + 4 );
+
 	blocksize = client->download.size - offset;
+
+	// pending reliable commands left no usable room. emitting a zero length block here would
+	// tell the client to re-ask for the same offset, and since it sends that request
+	// immediately, the two would spin against each other. send the commands on their own
+	// instead - that frees the room, and the client's own retry re-asks for the block
+	if( blocksize > 0 && headroom < 1 )
+	{
+		SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
+		return;
+	}
+
 	// jalfixme: adapt download to user rate setting and sv_maxrate setting.
-	if( blocksize > sizeof( data ) )
-		blocksize = sizeof( data );
+	if( blocksize > (int)sizeof( data ) )
+		blocksize = (int)sizeof( data );
+	if( blocksize > headroom )
+		blocksize = headroom;
 	if( offset + blocksize > client->download.size )
 		blocksize = client->download.size - offset;
 	if( blocksize < 0 )
@@ -636,7 +664,7 @@ static void SV_NextDownload_f( client_t *client )
 	MSG_WriteLong( &tmpMessage, blocksize );
 	if( blocksize > 0 )
 		MSG_CopyData( &tmpMessage, data, blocksize );
-	SV_SendMessageToClient( client, &tmpMessage );
+	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
 
 	client->download.timeout = svs.realtime + 10000;
 }
@@ -668,7 +696,7 @@ static void SV_DenyDownload( client_t *client, const char *reason )
 	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 	SV_SendServerCommand( client, "initdownload \"%s\" %i %u %i \"%s\"", "", -1, 0, false, reason ? reason : "" );
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
-	SV_SendMessageToClient( client, &tmpMessage );
+	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
 }
 
 static bool SV_FilenameForDownloadRequest( const char *requestname, bool requestpak,
@@ -851,7 +879,7 @@ local_download:
 	SV_SendServerCommand( client, "initdownload \"%s\" %i %u %i \"%s\"", client->download.name,
 		client->download.size, checksum, local_http ? 1 : 0, ( url ? url : "" ) );
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
-	SV_SendMessageToClient( client, &tmpMessage );
+	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
 
 	if( url )
 	{
@@ -1339,7 +1367,7 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg )
 						MSG_WriteShort(&tmpMessage, client->edict->s.number - 1);
 						MSG_WriteShort(&tmpMessage, voiceDataSize);
 						MSG_CopyData(&tmpMessage, voiceData, voiceDataSize);
-						SV_SendMessageToClient(cl, &tmpMessage);
+						SV_SendMessageToClient(cl, &tmpMessage, NET_SEND_UNRELIABLE);
 					}
 				}
 				break;

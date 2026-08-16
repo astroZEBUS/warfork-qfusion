@@ -439,14 +439,14 @@ void SV_PrepWorldFrame( void );
 //
 // sv_send.c
 //
-bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg );
+bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg, int flags );
 void SV_AddServerCommand( client_t *client, const char *cmd );
 void SV_SendServerCommand( client_t *cl, const char *format, ... );
 void SV_AddGameCommand( client_t *client, const char *cmd );
 void SV_AddReliableCommandsToMessage( client_t *client, msg_t *msg );
 bool SV_SendClientsFragments( void );
 void SV_InitClientMessage( client_t *client, msg_t *msg, uint8_t *data, size_t size );
-bool SV_SendMessageToClient( client_t *client, msg_t *msg );
+bool SV_SendMessageToClient( client_t *client, msg_t *msg, int flags );
 void SV_ResetClientFrameCounters( void );
 
 typedef enum { RD_NONE, RD_PACKET } redirect_t;

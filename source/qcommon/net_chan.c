@@ -102,8 +102,9 @@ void Netchan_OutOfBand( const socket_t *socket, const netadr_t *address, size_t 
 	MSG_WriteLong( &send, -1 ); // -1 sequence means out of band
 	MSG_WriteData( &send, data, length );
 
-	// send the datagram
-	if( !NET_SendPacket( socket, send.data, send.cursize, address ) )
+	// send the datagram. out-of-band traffic is handshake and query chatter that has its own
+	// retry logic, so it is never worth a reliable send
+	if( !NET_SendPacket( socket, send.data, send.cursize, address, NET_SEND_UNRELIABLE ) )
 		Com_Printf( "NET_SendPacket: Error: %s\n", NET_ErrorString() );
 }
 
@@ -338,8 +339,9 @@ bool Netchan_TransmitNextFragment( netchan_t *chan )
 	MSG_WriteShort( &send, ( last ? ( fragmentLength | FRAGMENT_LAST ) : fragmentLength ) );
 	MSG_CopyData( &send, chan->unsentBuffer + chan->unsentFragmentStart, fragmentLength );
 
-	// send the datagram
-	if( !NET_SendPacket( chan->socket, send.data, send.cursize, &chan->remoteAddress ) )
+	// send the datagram. the flags come from the Netchan_Transmit that queued this message -
+	// fragments are spaced out over later frames, so the caller is long gone by now
+	if( !NET_SendPacket( chan->socket, send.data, send.cursize, &chan->remoteAddress, chan->unsentFlags ) )
 	{
 		Netchan_DropAllFragments( chan );
 		return false;
@@ -388,7 +390,7 @@ bool Netchan_PushAllFragments( netchan_t *chan )
 * Sends a message to a connection, fragmenting if necessary
 * A 0 length will still generate a packet.
 */
-bool Netchan_Transmit( netchan_t *chan, msg_t *msg )
+bool Netchan_Transmit( netchan_t *chan, msg_t *msg, int flags )
 {
 	msg_t send;
 	uint8_t send_buf[MAX_PACKETLEN];
@@ -402,6 +404,8 @@ bool Netchan_Transmit( netchan_t *chan, msg_t *msg )
 	}
 	chan->unsentFragmentStart = 0;
 	chan->unsentIsCompressed = false;
+	// latched for Netchan_TransmitNextFragment, which runs on later frames
+	chan->unsentFlags = flags;
 
 	// fragment large reliable messages
 	if( msg->cursize >= FRAGMENT_SIZE )
@@ -436,7 +440,7 @@ bool Netchan_Transmit( netchan_t *chan, msg_t *msg )
 	MSG_CopyData( &send, msg->data, msg->cursize );
 
 	// send the datagram
-	if( !NET_SendPacket( chan->socket, send.data, send.cursize, &chan->remoteAddress ) )
+	if( !NET_SendPacket( chan->socket, send.data, send.cursize, &chan->remoteAddress, flags ) )
 		return false;
 
 	if( showpackets->integer )

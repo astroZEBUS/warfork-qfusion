@@ -53,7 +53,7 @@ void CL_ParseServerMessage( msg_t *msg )
 {
 }
 
-void CL_Netchan_Transmit( msg_t *msg )
+void CL_Netchan_Transmit( msg_t *msg, int flags )
 {
 }
 

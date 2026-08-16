@@ -171,7 +171,7 @@ static void TV_Upstream_Netchan_Transmit( upstream_t *upstream, msg_t *msg )
 	}
 	}*/
 
-	Netchan_Transmit( &upstream->netchan, msg );
+	Netchan_Transmit( &upstream->netchan, msg, NET_SEND_UNRELIABLE );
 	upstream->lastPacketSentTime = tvs.realtime;
 }
 

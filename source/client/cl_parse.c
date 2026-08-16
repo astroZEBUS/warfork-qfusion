@@ -362,6 +362,19 @@ static char *CL_CollapseUrlSlashes( char *url )
 }
 
 /*
+* CL_RequestDownloadBlock
+*
+* Queues the nextdl for the given offset and pushes it out now. Without the explicit send it
+* would sit in the reliable command buffer until CL_SendMessagesToServer's 100ms connecting-state
+* gate lets a packet through, which alone caps a server download at ~10 blocks a second.
+*/
+static void CL_RequestDownloadBlock( int offset )
+{
+	CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, offset ) );
+	CL_SendMessagesToServer( true );
+}
+
+/*
 * CL_InitServerDownload
 *
 * Handles server's initdownload message, starts web or server download if possible
@@ -628,7 +641,7 @@ static void CL_InitServerDownload( const char *filename, int size, unsigned chec
 	cls.download.timeout = Sys_Milliseconds() + 3000;
 	cls.download.retries = 0;
 
-	CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, cls.download.offset ) );
+	CL_RequestDownloadBlock( cls.download.offset );
 }
 
 /*
@@ -854,6 +867,17 @@ static void CL_ParseDownload( msg_t *msg )
 		return;
 	}
 
+	// an empty block with data still outstanding makes no progress, and the request for the
+	// next one goes out the moment this is parsed - so accepting it would spin against the
+	// server instead of transferring anything. count it as a failed block
+	if( size == 0 && offset < cls.download.size )
+	{
+		Com_Printf( "Error: Empty download block\n" );
+		CL_RetryDownload();
+		TracyCZoneEnd( ctx );
+		return;
+	}
+
 	FS_Write( msg->data + msg->readcount, size, cls.download.filenum );
 	msg->readcount += size;
 	cls.download.offset += size;
@@ -867,7 +891,7 @@ static void CL_ParseDownload( msg_t *msg )
 		cls.download.timeout = Sys_Milliseconds() + 3000;
 		cls.download.retries = 0;
 
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, cls.download.offset ) );
+		CL_RequestDownloadBlock( cls.download.offset );
 	}
 	else
 	{
@@ -1264,7 +1288,7 @@ static void CL_RPC_cb_steamAuth( void *self, struct steam_rpc_pkt_s *rec ){
 	MSG_WriteByte( &msg, clc_steamauth );
 	MSG_WriteLong( &msg, rec->auth_session.pcbTicket );
 	MSG_WriteData( &msg, rec->auth_session.ticket, rec->auth_session.pcbTicket );
-	CL_Netchan_Transmit( &msg );
+	CL_Netchan_Transmit( &msg, NET_SEND_UNRELIABLE );
 }
 
 static void CL_SteamAuth(){
