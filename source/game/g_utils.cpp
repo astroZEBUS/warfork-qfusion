@@ -688,6 +688,8 @@ void G_UseTargets( edict_t *ent, edict_t *activator )
 		t = NULL;
 		while( ( t = G_Find( t, FOFS( targetname ), ent->killtarget ) ) )
 		{
+			if( t == ent )
+				continue;
 			G_FreeEdict( t );
 			if( !ent->r.inuse )
 			{
@@ -708,13 +710,8 @@ void G_UseTargets( edict_t *ent, edict_t *activator )
 		while( ( t = G_Find( t, FOFS( targetname ), ent->target ) ) )
 		{
 			if( t == ent )
-			{
-				G_Printf( "WARNING: Entity used itself.\n" );
-			}
-			else
-			{
-				G_CallUse( t, ent, activator );
-			}
+				continue;
+			G_CallUse( t, ent, activator );
 			if( !ent->r.inuse )
 			{
 				G_Printf( "entity was removed while using targets\n" );
