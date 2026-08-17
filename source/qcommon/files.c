@@ -1408,6 +1408,8 @@ static int _FS_FOpenFile( const char *filename, int *filenum, int mode, bool bas
 		}
 
 		f = Sys_FS_fopen( tempname, "rb" );
+		if( !f )
+			goto error;
 		end = FS_FileLength( f, false );
 
 		*filenum = FS_OpenFileHandle();
