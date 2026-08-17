@@ -269,7 +269,7 @@ void Mod_LoadSkeletalModel( model_t *mod, const model_t *parent, void *buffer, b
 	if( header->ofs_text ) {
 		memcpy( texts, (const char *)(pbase + header->ofs_text), header->num_text );
 	}
-	texts[header->ofs_text] = '\0';
+	texts[header->num_text] = '\0';
 
 
 	// load vertex arrays

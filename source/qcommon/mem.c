@@ -192,7 +192,6 @@ static inline struct memheader_s *__pullMemHeaderFromReserve()
 	return unit;
 }
 
-
 static inline void __returnMemHeaderToReserve(struct memheader_s* mem) {
 	memset( mem, 0, sizeof( struct memheader_s ) );
 	mem->next = reservoirHeaders;
@@ -317,6 +316,9 @@ static inline void __unlinkMemory( struct memheader_s *mem )
 	const size_t hashIndex = __resolveUnitHashIndex( mem->reportedAddress );
 	if( hashTable[hashIndex] == mem ) {
 		hashTable[hashIndex] = mem->hnext;
+		if( mem->hnext ) {
+			mem->hnext->hprev = NULL;
+		}
 	} else {
 		if( mem->hprev ) {
 			mem->hprev->hnext = mem->hnext;
@@ -659,7 +661,7 @@ void Q_EmptyPool( struct mempool_s *pool )
 		while( child ) {
 			if( len >= capacity ) {
 				capacity = ( capacity >> 1 ) + capacity; // grow 1.5
-				process = realloc( process, capacity );
+				process = realloc( process, capacity * sizeof( struct mempool_s * ) );
 			}
 			process[len++] = child;
 			child = child->next;
@@ -702,7 +704,7 @@ void Q_FreePool( struct mempool_s *pool )
 		while( child ) {
 			if( len >= capacity ) {
 				capacity = ( capacity >> 1 ) + capacity; // grow 1.5
-				process = realloc( process, capacity );
+				process = realloc( process, capacity * sizeof( struct mempool_s * ) );
 			}
 			process[len++] = child;
 			child = child->next;
