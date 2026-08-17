@@ -64,7 +64,6 @@ break
 //#define WEAPONDEFS_FROM_DISK
 #endif
 
-#define DOWNSCALE_ITEMS // Ugly hack for the release. Item models are way too big
 #define ELECTROBOLT_TEST
 
 // collaborations
