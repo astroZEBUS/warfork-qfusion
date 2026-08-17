@@ -212,13 +212,10 @@ enum steam_cmd_s {
 	RPC_SRV_P2P_LISTEN,
 	RPC_SRV_P2P_ACCEPT_CONNECTION,
 	RPC_SRV_P2P_DISCONNECT,
-	RPC_SRV_P2P_SEND_MESSAGE,
 	RPC_SRV_P2P_CLOSE_LISTEN,
 
 	RPC_P2P_CONNECT,
 	RPC_P2P_DISCONNECT,
-
-	RPC_P2P_SEND_MESSAGE,
 
 	RPC_AUTHSESSION_TICKET,
 
@@ -239,6 +236,12 @@ enum steam_cmd_s {
 
 	EVT_P2P_RECV_MESSAGES,
 	EVT_SRV_P2P_RECV_MESSAGES,
+
+	// sending is one way by design. an RPC would claim a slot in the parent's rpc_handles ring
+	// for a reply that never comes, and a file transfer issues one send per netchan fragment -
+	// fast enough to wrap that ring and overwrite the callback of a request still in flight
+	EVT_SRV_P2P_SEND_MESSAGE,
+	EVT_P2P_SEND_MESSAGE,
 
 	EVT_END,
 	CMD_LEN
@@ -371,15 +374,6 @@ STEAM_RPC_RECV( p2p_listen )
 	uint64_t steamID;
 };
 
-STEAM_RPC_REQ( send_message )
-{
-	STEAM_RPC_SHIM_COMMON()
-	int messageReliability;
-	uint32_t handle;
-	int count;
-	char buffer[];
-};
-
 STEAM_RPC_RECV( getvoice )
 {
 	STEAM_RPC_SHIM_COMMON()
@@ -422,8 +416,6 @@ struct steam_rpc_pkt_s {
 		struct p2p_connect_req_s p2p_listen;
 		struct p2p_connect_recv_s p2p_connect_recv;
 		struct p2p_listen_recv_s p2p_listen_recv;
-
-		struct send_message_req_s send_message;
 
 		struct getvoice_recv_s getvoice_recv;
 		struct decompress_voice_req_s decompress_voice;
@@ -501,6 +493,15 @@ STEAM_EVT( p2p_net_connection_changed )
 	uint32_t state;
 };
 
+STEAM_EVT( send_message )
+{
+	STEAM_SHIM_COMMON()
+	int messageReliability;
+	uint32_t handle;
+	int count;
+	char buffer[];
+};
+
 STEAM_EVT( recv_messages )
 {
 	STEAM_SHIM_COMMON()
@@ -524,6 +525,7 @@ struct steam_evt_pkt_s {
 		struct p2p_connection_status_changed_evt_s p2p_connection_status_changed;
 		struct p2p_net_connection_changed_evt_s p2p_net_connection_changed;
 		struct recv_messages_evt_s recv_messages;
+		struct send_message_evt_s send_message;
 		struct policy_response_evt_s policy_response;
 	};
 };
@@ -545,11 +547,11 @@ struct steam_packet_buf {
 };
 
 // Largest payload that will actually survive a trip to the child. The child reads a parent packet
-// into a fixed STEAM_PACKED_RESERVE_SIZE buffer, so a send_message_req_s has to fit inside it,
+// into a fixed STEAM_PACKED_RESERVE_SIZE buffer, so a send_message_evt_s has to fit inside it,
 // header and length prefix included. This is well below SDR_MAX_MESSAGE_SIZE - that one bounds
 // what the relay itself will carry, and is the weaker of the two constraints.
 #define SDR_MAX_SENDABLE_MESSAGE_SIZE \
-	( STEAM_PACKED_RESERVE_SIZE - sizeof( uint32_t ) - sizeof( struct send_message_req_s ) )
+	( STEAM_PACKED_RESERVE_SIZE - sizeof( uint32_t ) - sizeof( struct send_message_evt_s ) )
 
 #pragma pack( pop )
 

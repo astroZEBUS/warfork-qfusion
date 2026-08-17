@@ -559,21 +559,311 @@ static void SV_Begin_f( client_t *client )
 //=============================================================================
 
 
+// slack left under MAX_MSGLEN when filling a download message, see SV_EmitDownloadChunks
+#define DOWNLOAD_MSG_SLACK 2048
+
+// smallest window we will stream with, whatever sv_download_window says
+#define DOWNLOAD_MIN_WINDOW 8
+
+/*
+* SV_ClientDownloadStreamable
+*
+* Whether download messages to this client are delivered reliably and in order.
+*
+* This no longer selects a protocol - the chunk bitset drives every client the same way - it
+* only decides how many chunks are worth packing into one netchan message. A message that gets
+* fragmented is lost whole if any one fragment is, so on a transport that can drop a packet a
+* fat message just means more to lose.
+*
+* Note this is deliberately not client->reliable. That flag is a claim about the whole
+* connection and is false for SDR (SV_ClientConnect), because snapshots on the same connection
+* still go out unreliable. Download messages are sent NET_SEND_RELIABLE, which on SDR is steam's
+* reliable lane - delivered in order or the connection dies - so the download is ordered even
+* though the connection as a whole is not.
+*/
+bool SV_ClientDownloadStreamable( const client_t *client )
+{
+	if( client->netchan.remoteAddress.type == NA_SDR )
+		return true;
+	return client->reliable;
+}
+
+/*
+* SV_DownloadWindow
+*
+* How far ahead of a client's acks the server may run, in chunks.
+*/
+int SV_DownloadWindow( void )
+{
+	int window = sv_download_window->integer / DOWNLOAD_CHUNK_SIZE;
+
+	clamp( window, DOWNLOAD_MIN_WINDOW, DOWNLOAD_MAX_WINDOW );
+	return window;
+}
+
+/*
+* SV_DownloadNextChunk
+*
+* Picks the next chunk to put on the wire: anything outstanding that needs to go again first, in
+* increasing order, then a chunk never sent if the window has room.
+*
+* A chunk goes again either because the last ack named it as a hole, or because it has simply
+* been out too long. The second rule is what covers a lost retransmit and a lost ack - neither
+* of those produces any hole for the client to name - so the transfer never depends on a
+* particular packet arriving.
+*/
+static bool SV_DownloadNextChunk( client_t *client, int window, size_t *chunk, bool *resend )
+{
+	size_t c;
+
+	for( c = client->download.baseChunk; c < client->download.nextChunk; c++ )
+	{
+		size_t slot = c & DOWNLOAD_ACK_MASK;
+
+		if( DL_BitGet( client->download.acked, slot ) )
+			continue;
+
+		if( DL_BitGet( client->download.pending, slot )
+			|| svs.realtime - client->download.sentTime[slot] >= DOWNLOAD_RTO )
+		{
+			*chunk = c;
+			*resend = true;
+			return true;
+		}
+	}
+
+	if( client->download.nextChunk < client->download.numChunks
+		&& client->download.nextChunk - client->download.baseChunk < (size_t)window )
+	{
+		*chunk = client->download.nextChunk;
+		*resend = false;
+		return true;
+	}
+
+	return false;
+}
+
+/*
+* SV_DownloadHasWork
+*
+* Whether SV_EmitDownloadChunks would have anything to say. Lets the pump skip clients that are
+* only waiting on an ack.
+*/
+bool SV_DownloadHasWork( const client_t *client )
+{
+	size_t chunk;
+	bool resend;
+
+	return SV_DownloadNextChunk( (client_t *)client, SV_DownloadWindow(), &chunk, &resend );
+}
+
+/*
+* SV_EmitDownloadChunks
+*
+* Packs as many chunks as fit into one netchan message and sends it. Returns the number of
+* payload bytes emitted, or 0 if nothing could be sent.
+*/
+int SV_EmitDownloadChunks( client_t *client )
+{
+	int capacity, window, emitted = 0;
+	uint8_t data[DOWNLOAD_CHUNK_SIZE];
+
+	assert( client->download.file );
+
+	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
+	SV_AddReliableCommandsToMessage( client, &tmpMessage );
+
+	// whatever is left in tmpMessage after the reliable commands, in whole chunks.
+	//
+	// DOWNLOAD_MSG_SLACK keeps the message off the top of MAX_MSGLEN. sv_compresspackets is on
+	// by default, and Netchan_DecompressMessage rejects a message outright once its decompressed
+	// size reaches maxsize - the test there is >=, not >. pak payload does not compress, so a
+	// message sized exactly to the remaining room would come back out at the same size and be
+	// dropped with "Packet too big" rather than delivered
+	capacity = ( (int)( tmpMessage.maxsize - tmpMessage.cursize ) - DOWNLOAD_MSG_SLACK )
+		/ ( DOWNLOAD_CHUNK_HEADER + DOWNLOAD_CHUNK_SIZE );
+	if( capacity > DOWNLOAD_MAX_RUN_CHUNKS )
+		capacity = DOWNLOAD_MAX_RUN_CHUNKS;
+	// one chunk per message where a packet can go missing, so a chunk stays inside a single
+	// netchan fragment and a drop costs a chunk instead of the whole message
+	if( !SV_ClientDownloadStreamable( client ) && capacity > 1 )
+		capacity = 1;
+
+	// pending reliable commands left no usable room. send them on their own - that frees the
+	// room, and the next frame carries chunks again
+	if( capacity < 1 )
+	{
+		SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
+		return 0;
+	}
+
+	window = SV_DownloadWindow();
+
+	while( capacity > 0 )
+	{
+		size_t chunk;
+		bool resend;
+		int len, got;
+
+		if( !SV_DownloadNextChunk( client, window, &chunk, &resend ) )
+			break;
+
+		len = client->download.size - (int)( chunk * DOWNLOAD_CHUNK_SIZE );
+		if( len > DOWNLOAD_CHUNK_SIZE )
+			len = DOWNLOAD_CHUNK_SIZE;
+		if( len < 1 )
+			break;
+
+		FS_Seek( client->download.file, (int)( chunk * DOWNLOAD_CHUNK_SIZE ), FS_SEEK_SET );
+		got = FS_Read( data, len, client->download.file );
+		if( got != len )
+		{
+			Com_Printf( "Error reading %s for upload to %s\n", client->download.name, client->name );
+			break;
+		}
+
+		MSG_WriteByte( &tmpMessage, svc_download );
+		MSG_WriteByte( &tmpMessage, client->download.id );
+		MSG_WriteLong( &tmpMessage, (int)chunk );
+		MSG_WriteShort( &tmpMessage, len );
+		MSG_CopyData( &tmpMessage, data, len );
+
+		DL_BitClear( client->download.pending, chunk & DOWNLOAD_ACK_MASK );
+		client->download.sentTime[chunk & DOWNLOAD_ACK_MASK] = svs.realtime;
+		if( chunk >= client->download.nextChunk )
+			client->download.nextChunk = chunk + 1;
+		if( resend )
+			client->download.resends++;
+
+		capacity--;
+		emitted += len;
+	}
+
+	// the reaper is deliberately not refreshed here. only an ack is evidence the client is still
+	// reading; refreshing on a send would keep the file handle alive against one that stopped
+	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
+
+	return emitted;
+}
+
+/*
+* SV_ParseDownloadAck
+*
+* Handles clc_dlack: a base chunk the client has everything below, plus a bitset naming the
+* chunks above it that it also holds. Absolute state, not a delta, so a lost or reordered ack
+* costs nothing and the client just repeats it.
+*/
+static void SV_ParseDownloadAck( client_t *client, msg_t *msg )
+{
+	uint64_t bits[2];
+	size_t base, c;
+	int id, i, maxDelta = 0;
+	size_t limit;
+
+	// read the whole thing before validating anything. bailing early would leave our bytes in
+	// the stream and SV_ParseClientMessage would take one of them for an opcode
+	id = MSG_ReadByte( msg );
+	base = (size_t)(unsigned)MSG_ReadLong( msg );
+	bits[0] = (uint64_t)(uint32_t)MSG_ReadLong( msg );
+	bits[0] |= (uint64_t)(uint32_t)MSG_ReadLong( msg ) << 32;
+	bits[1] = (uint64_t)(uint32_t)MSG_ReadLong( msg );
+	bits[1] |= (uint64_t)(uint32_t)MSG_ReadLong( msg ) << 32;
+
+	if( !client->download.file || id != client->download.id )
+		return;                                 // no download, or one we already replaced
+	if( base > client->download.numChunks )
+		return;                                 // bogus
+	if( base < client->download.baseChunk )
+		return;                                 // a reordered ack the stream already overtook
+
+	if( base > client->download.baseChunk )
+	{
+		size_t advance = base - client->download.baseChunk;
+
+		if( advance >= DOWNLOAD_ACK_BITS )
+		{
+			memset( client->download.acked, 0, sizeof( client->download.acked ) );
+			memset( client->download.pending, 0, sizeof( client->download.pending ) );
+		}
+		else
+		{
+			for( c = client->download.baseChunk; c < base; c++ )
+			{
+				DL_BitClear( client->download.acked, c & DOWNLOAD_ACK_MASK );
+				DL_BitClear( client->download.pending, c & DOWNLOAD_ACK_MASK );
+			}
+		}
+
+		client->download.baseChunk = base;
+		if( client->download.nextChunk < base )
+			client->download.nextChunk = base;
+	}
+
+	// bit i names chunk base+1+i. a client cannot hold what was never sent, so anything at or
+	// above nextChunk is ignored rather than trusted
+	for( i = 0; i < DOWNLOAD_MAX_WINDOW; i++ )
+	{
+		if( !DL_BitGet( bits, i ) )
+			continue;
+
+		c = base + 1 + i;
+		if( c >= client->download.nextChunk )
+			continue;
+
+		maxDelta = i + 1;
+		if( !DL_BitGet( client->download.acked, c & DOWNLOAD_ACK_MASK ) )
+		{
+			DL_BitSet( client->download.acked, c & DOWNLOAD_ACK_MASK );
+			DL_BitClear( client->download.pending, c & DOWNLOAD_ACK_MASK );
+		}
+	}
+
+	// only chunks well below the highest one the client reported are known lost. anything at or
+	// above it is still legitimately in flight, and DOWNLOAD_REORDER_SLACK keeps the ones just
+	// under it out of it too, since a gap that shallow is as likely to be a chunk running late
+	// as a chunk that never arrives. whatever is left over is caught by DOWNLOAD_RTO.
+	//
+	// this is idempotent, which is what makes a duplicated ack harmless: it names the same holes
+	// and sets the same bits
+	limit = 0;
+	if( maxDelta > DOWNLOAD_REORDER_SLACK )
+		limit = base + (size_t)maxDelta - DOWNLOAD_REORDER_SLACK;
+	if( limit > client->download.nextChunk )
+		limit = client->download.nextChunk;
+
+	for( c = base; c < limit; c++ )
+	{
+		size_t slot = c & DOWNLOAD_ACK_MASK;
+
+		if( DL_BitGet( client->download.acked, slot ) )
+			continue;
+		if( svs.realtime - client->download.sentTime[slot] < DOWNLOAD_FAST_DELAY )
+			continue;
+		DL_BitSet( client->download.pending, slot );
+	}
+
+	// an ack is the only real evidence the client is still there, so this is the one place the
+	// reaper is refreshed
+	client->download.timeout = svs.realtime + 10000;
+
+	if( client->download.baseChunk >= client->download.numChunks )
+	{
+		// belt and braces: a lost "nextdl -1" would otherwise leave the handle open
+		Com_Printf( "Upload of %s to %s%s completed\n", client->download.name, client->name, S_COLOR_WHITE );
+		SV_ClientCloseDownload( client );
+	}
+}
+
 /*
 * SV_NextDownload_f
-* 
-* Responds to reliable nextdl packet with unreliable download packet
-* If nextdl packet's offet information is negative, download will be stopped
+*
+* Responds to a reliable nextdl packet, which now carries only the one-shot events: a
+* non-negative offset opens the file and arms the pump at the client's resume point, -1 means
+* the transfer completed and -2 that it failed. Everything in between is clc_dlack.
 */
 static void SV_NextDownload_f( client_t *client )
 {
-	int blocksize;
-	int headroom;
 	int offset;
-	// the block goes out as one netchan message, so this has to leave room under MAX_MSGLEN
-	// for the svc_download header, the filename and any pending reliable commands. it is also
-	// what the client reassembles into fragmentBuffer[MAX_MSGLEN]
-	uint8_t data[FRAGMENT_SIZE*8];
 
 	if( !client->download.name )
 	{
@@ -620,53 +910,19 @@ static void SV_NextDownload_f( client_t *client )
 			SV_ClientCloseDownload( client );
 			return;
 		}
+
+		// the request also picks the resume point - the client may already hold a partial file -
+		// so the stream starts there rather than at zero. the client always sends a chunk
+		// aligned offset, even when its partial file is not a whole number of chunks
+		client->download.numChunks =
+			( (size_t)client->download.size + DOWNLOAD_CHUNK_SIZE - 1 ) / DOWNLOAD_CHUNK_SIZE;
+		client->download.baseChunk = (size_t)offset / DOWNLOAD_CHUNK_SIZE;
+		client->download.nextChunk = client->download.baseChunk;
+		memset( client->download.acked, 0, sizeof( client->download.acked ) );
+		memset( client->download.pending, 0, sizeof( client->download.pending ) );
+		memset( client->download.sentTime, 0, sizeof( client->download.sentTime ) );
+		client->download.timeout = svs.realtime + 10000;
 	}
-
-	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
-	SV_AddReliableCommandsToMessage( client, &tmpMessage );
-
-	// whatever is left in tmpMessage after the reliable commands, minus the svc_download
-	// header: a byte, the filename, and the two longs
-	headroom = (int)( tmpMessage.maxsize - tmpMessage.cursize )
-		- (int)( 1 + strlen( client->download.name ) + 1 + 4 + 4 );
-
-	blocksize = client->download.size - offset;
-
-	// pending reliable commands left no usable room. emitting a zero length block here would
-	// tell the client to re-ask for the same offset, and since it sends that request
-	// immediately, the two would spin against each other. send the commands on their own
-	// instead - that frees the room, and the client's own retry re-asks for the block
-	if( blocksize > 0 && headroom < 1 )
-	{
-		SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
-		return;
-	}
-
-	// jalfixme: adapt download to user rate setting and sv_maxrate setting.
-	if( blocksize > (int)sizeof( data ) )
-		blocksize = (int)sizeof( data );
-	if( blocksize > headroom )
-		blocksize = headroom;
-	if( offset + blocksize > client->download.size )
-		blocksize = client->download.size - offset;
-	if( blocksize < 0 )
-		blocksize = 0;
-
-	if( blocksize > 0 )
-	{
-		FS_Seek( client->download.file, offset, FS_SEEK_SET );
-		blocksize = FS_Read( data, blocksize, client->download.file );
-	}
-
-	MSG_WriteByte( &tmpMessage, svc_download );
-	MSG_WriteString( &tmpMessage, client->download.name );
-	MSG_WriteLong( &tmpMessage, offset );
-	MSG_WriteLong( &tmpMessage, blocksize );
-	if( blocksize > 0 )
-		MSG_CopyData( &tmpMessage, data, blocksize );
-	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
-
-	client->download.timeout = svs.realtime + 10000;
 }
 
 /*
@@ -748,6 +1004,9 @@ static bool SV_FilenameForDownloadRequest( const char *requestname, bool request
 	return true;
 }
 
+// download generation counter, see client_download_t.id
+static uint8_t sv_download_id;
+
 /*
 * SV_BeginDownload_f
 * Responds to reliable download packet with reliable initdownload packet
@@ -761,6 +1020,7 @@ static void SV_BeginDownload_f( client_t *client )
 	char *url;
 	const char *errormsg = NULL;
 	bool allow, requestpak;
+	int ackchunks;
 	bool local_http = SV_ClientAllowHttpDownloads( client ) && sv_uploads_http->integer != 0;
 
 	requestpak = ( atoi( Cmd_Argv( 1 ) ) == 1 );
@@ -874,10 +1134,25 @@ local_download:
 		url = NULL;
 	}
 
+	// a fresh generation, so blocks and acks left over from a download this one replaces are
+	// recognised on both sides and dropped. never zero, and a byte is plenty: aliasing would
+	// take 255 downloads inside one window
+	if( ++sv_download_id == 0 )
+		sv_download_id = 1;
+	client->download.id = sv_download_id;
+	client->download.numChunks =
+		( (size_t)client->download.size + DOWNLOAD_CHUNK_SIZE - 1 ) / DOWNLOAD_CHUNK_SIZE;
+
+	// how much the client's base has to advance before it reports again. a quarter of the window
+	// keeps the pump fed without an ack per chunk
+	ackchunks = SV_DownloadWindow() / 4;
+	clamp( ackchunks, 4, 32 );
+
 	// start the download
 	SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
-	SV_SendServerCommand( client, "initdownload \"%s\" %i %u %i \"%s\"", client->download.name,
-		client->download.size, checksum, local_http ? 1 : 0, ( url ? url : "" ) );
+	SV_SendServerCommand( client, "initdownload \"%s\" %i %u %i \"%s\" %i %i", client->download.name,
+		client->download.size, checksum, local_http ? 1 : 0, ( url ? url : "" ),
+		client->download.id, ackchunks );
 	SV_AddReliableCommandsToMessage( client, &tmpMessage );
 	SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE );
 
@@ -1276,6 +1551,10 @@ void SV_ParseClientMessage( client_t *client, msg_t *msg )
 			SV_ExecuteUserCommand( client, s );
 			if( client->state == CS_ZOMBIE )
 				return; // disconnect command
+			break;
+
+		case clc_dlack:
+			SV_ParseDownloadAck( client, msg );
 			break;
 
 		case clc_extension:

@@ -112,6 +112,21 @@ typedef struct
 	int size;               // total bytes (can't use EOF because of paks)
 	unsigned int timeout;   // so we can free the file being downloaded
 	                        // if client omits sending success or failure message
+
+	// the file is streamed as fixed size chunks and the client reports what it holds as a base
+	// chunk plus a bitset over the chunks above it, so a loss costs only the chunks that were
+	// actually lost. everything here mirrors what the last ack said
+	uint8_t id;             // generation, 1..255 and never 0. stamped on every chunk and echoed
+	                        // in every ack, so blocks and acks from a superseded download are
+	                        // recognised and dropped
+	size_t numChunks;       // ( size + DOWNLOAD_CHUNK_SIZE - 1 ) / DOWNLOAD_CHUNK_SIZE
+	size_t baseChunk;       // first chunk the client has not confirmed
+	size_t nextChunk;       // next chunk never sent. always >= baseChunk
+	uint64_t acked[2];      // ring, bit ( c & DOWNLOAD_ACK_MASK ) means the client holds chunk c
+	uint64_t pending[2];    // ring, same indexing: queued for retransmit right now
+	unsigned int sentTime[DOWNLOAD_ACK_BITS];   // ring, when each chunk last went out
+	int resends;            // diagnostic: chunks sent more than once
+	unsigned int rateTime;  // when the sv_download_rate allowance was last charged
 } client_download_t;
 
 typedef struct
@@ -370,6 +385,9 @@ extern cvar_t *sv_uploads_baseurl;
 extern cvar_t *sv_uploads_demos;
 extern cvar_t *sv_uploads_demos_baseurl;
 
+extern cvar_t *sv_download_window;
+extern cvar_t *sv_download_rate;
+
 extern cvar_t *sv_pure;
 extern cvar_t *sv_pure_forcemodulepk3;
 
@@ -445,6 +463,7 @@ void SV_SendServerCommand( client_t *cl, const char *format, ... );
 void SV_AddGameCommand( client_t *client, const char *cmd );
 void SV_AddReliableCommandsToMessage( client_t *client, msg_t *msg );
 bool SV_SendClientsFragments( void );
+bool SV_SendClientDownloads( void );
 void SV_InitClientMessage( client_t *client, msg_t *msg, uint8_t *data, size_t size );
 bool SV_SendMessageToClient( client_t *client, msg_t *msg, int flags );
 void SV_ResetClientFrameCounters( void );
@@ -486,6 +505,10 @@ void SV_DropClient( client_t *drop, int type, const char *format, ... );
 void SV_ExecuteClientThinks( int clientNum );
 void SV_ClientResetCommandBuffers( client_t *client );
 void SV_ClientCloseDownload( client_t *client );
+int SV_EmitDownloadChunks( client_t *client );
+int SV_DownloadWindow( void );
+bool SV_DownloadHasWork( const client_t *client );
+bool SV_ClientDownloadStreamable( const client_t *client );
 
 //
 // sv_mv.c

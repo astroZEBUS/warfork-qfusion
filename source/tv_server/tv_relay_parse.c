@@ -228,7 +228,11 @@ void TV_Relay_ParseServerMessage( relay_t *relay, msg_t *msg )
 			break;
 
 		case svc_download:
-			//CL_ParseDownload( msg );
+			// tv never asks for a file, but the payload still has to come off the stream or the
+			// opcode loop would read one of its bytes as the next command
+			MSG_ReadByte( msg );                        // download id
+			MSG_ReadLong( msg );                        // chunk index
+			MSG_SkipData( msg, MSG_ReadShort( msg ) & 0xffff );
 			break;
 
 		case svc_clcack:

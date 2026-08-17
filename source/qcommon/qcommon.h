@@ -268,6 +268,7 @@ enum clc_ops_e
 	clc_extension,
 	clc_voice,
 	clc_steamauth,
+	clc_dlack,				// download selective ack: [byte] id [long] base [4 longs] bitset
 };
 
 //==============================================
@@ -513,6 +514,47 @@ NET
 #define	FRAGMENT_SIZE			( MAX_PACKETLEN - 96 )
 #define	FRAGMENT_LAST		(	 1<<14 )
 #define	FRAGMENT_BIT			( 1<<31 )
+
+//
+// server downloads
+//
+// the file is cut into fixed size chunks so that a chunk has an index that stays the same
+// across retransmits, which is what makes a selective ack possible at all. 1024 keeps a chunk
+// inside a single netchan fragment, so on a transport that can lose one a dropped packet costs
+// one chunk rather than a whole multi-fragment message
+#define DOWNLOAD_CHUNK_SIZE		1024
+// the ack carries a base chunk plus a bitset naming the chunks above it the client already
+// holds. two uint64 is the whole bitset, so nothing past base+DOWNLOAD_ACK_BITS can ever be
+// reported and the window must stay at or under it
+#define DOWNLOAD_ACK_BITS		128
+#define DOWNLOAD_ACK_MASK		( DOWNLOAD_ACK_BITS - 1 )
+// both sides hold their chunks in a DOWNLOAD_ACK_BITS slot ring indexed by ( chunk & MASK ), so
+// the window has to stay one short of the ring or chunk base and chunk base+DOWNLOAD_ACK_BITS
+// would land in the same slot
+#define DOWNLOAD_MAX_WINDOW		( DOWNLOAD_ACK_BITS - 1 )
+// most chunks packed into one netchan message
+#define DOWNLOAD_MAX_RUN_CHUNKS	16
+// how many chunks past a gap have to turn up before the gap counts as a loss rather than as
+// something merely running late. without it a transport that reorders even slightly makes the
+// server resend chunks that were already on their way
+#define DOWNLOAD_REORDER_SLACK	8
+// and however many chunks turned up after it, a chunk this recently sent is not resent either -
+// the ack naming it as a gap cannot yet reflect anything that happened less than a round trip
+// ago. roughly one relay round trip
+#define DOWNLOAD_FAST_DELAY		100
+// how long an unacknowledged chunk sits before it goes out again on its own. the ack bitset
+// normally catches a loss well before this - it names the hole as soon as anything past it
+// arrives - but nothing names a lost retransmit, or a lost ack, so there has to be a timer
+#define DOWNLOAD_RTO			600
+// svc_download header: opcode, download id, chunk index, chunk length
+#define DOWNLOAD_CHUNK_HEADER	( 1 + 1 + 4 + 2 )
+
+// bitset over uint64_t w[2], indexed by a chunk's ring slot ( chunk & DOWNLOAD_ACK_MASK ).
+// a bit for chunk c is only ever set while c is inside [base, base+DOWNLOAD_ACK_BITS) and is
+// cleared as the base passes it, so a slot can never be mistaken for a newer chunk
+#define DL_BitGet( w, i )		( ( (w)[( i ) >> 6] >> ( ( i ) & 63 ) ) & (uint64_t)1 )
+#define DL_BitSet( w, i )		( (w)[( i ) >> 6] |= (uint64_t)1 << ( ( i ) & 63 ) )
+#define DL_BitClear( w, i )		( (w)[( i ) >> 6] &= ~( (uint64_t)1 << ( ( i ) & 63 ) ) )
 
 typedef enum
 {

@@ -43,6 +43,8 @@ cvar_t *sv_uploads_http;
 cvar_t *sv_uploads_baseurl;
 cvar_t *sv_uploads_demos;
 cvar_t *sv_uploads_demos_baseurl;
+cvar_t *sv_download_window;
+cvar_t *sv_download_rate;
 
 cvar_t *sv_pure;
 cvar_t *sv_pure_forcemodulepk3;
@@ -754,6 +756,7 @@ static bool SV_RunGameFrame( int msec )
 	bool refreshSnapshot;
 	bool refreshGameModule;
 	bool sentFragments;
+	bool sentDownload;
 
 	TracyCZoneN( ctx, "SV_RunGameFrame", 1 );
 
@@ -763,6 +766,12 @@ static bool SV_RunGameFrame( int msec )
 	refreshGameModule = false;
 
 	sentFragments = SV_SendClientsFragments();
+
+	// hand out download blocks to clients that ack sparsely. this has to come after the fragment
+	// drain, since a block may only be queued on an empty fragment train. deliberately not fed
+	// into refreshSnapshot below - a download must not be allowed to starve the snapshot rate of
+	// the clients that are actually playing
+	sentDownload = SV_SendClientDownloads();
 
 	// see if it's time to run a new game frame
 	if( accTime >= WORLDFRAMETIME )
@@ -775,8 +784,10 @@ static bool SV_RunGameFrame( int msec )
 		refreshGameModule = true;
 	}
 
-	// if there aren't pending packets to be sent, we can sleep
-	if( dedicated->integer && !sentFragments && !refreshSnapshot )
+	// if there aren't pending packets to be sent, we can sleep. the download pump reports false
+	// as soon as a window is full or a rate budget is dry, so this still sleeps between acks
+	// rather than spinning for the length of a transfer
+	if( dedicated->integer && !sentFragments && !sentDownload && !refreshSnapshot )
 	{
 		int sleeptime = min( WORLDFRAMETIME - ( accTime + 1 ), sv.nextSnapTime - ( svs.gametime + 1 ) );
 
@@ -1177,6 +1188,16 @@ void SV_Init( void )
 	sv_uploads_baseurl =	Cvar_Get( "sv_uploads_baseurl", "", CVAR_ARCHIVE );
 	sv_uploads_demos =	    Cvar_Get( "sv_uploads_demos", "1", CVAR_ARCHIVE );
 	sv_uploads_demos_baseurl =	Cvar_Get( "sv_uploads_demos_baseurl", "", CVAR_ARCHIVE );
+
+	// how far ahead of a client's acks the server may run, in bytes, rounded down to whole
+	// DOWNLOAD_CHUNK_SIZE chunks and clamped to DOWNLOAD_MAX_WINDOW of them. this is the ceiling
+	// on download throughput - window/RTT - and at 127k over a 50ms relay that is ~2.5MB/s. it
+	// also has to stay clear of steam's 512k reliable send buffer: past that
+	// SendMessageToConnection fails with k_EResultLimitExceeded, which the shim only logs, so
+	// the data is simply gone
+	sv_download_window =	Cvar_Get( "sv_download_window", "262144", CVAR_ARCHIVE );
+	// per client throttle in KB/s. 0 leaves the window as the only bound
+	sv_download_rate =		Cvar_Get( "sv_download_rate", "0", CVAR_ARCHIVE );
 	if( dedicated->integer )
 	{
 

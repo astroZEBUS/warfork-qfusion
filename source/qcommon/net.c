@@ -556,16 +556,18 @@ static bool NET_SDR_SendPacket( const socket_t *socket, const void *data, size_t
 		return false;
 	}
 
-	struct send_message_req_s *req = (struct send_message_req_s*)malloc(sizeof(struct send_message_req_s) + length);
+	struct send_message_evt_s *req = (struct send_message_evt_s*)malloc(sizeof(struct send_message_evt_s) + length);
 	if( !req ) {
 		NET_SetErrorString( "Out of memory" );
 		return false;
 	}
 
+	// one way by design: the child performs the send and answers with nothing, so this is an
+	// event rather than an RPC - see EVT_P2P_SEND_MESSAGE in steamshim_types.h
 	if(socket->server) {
-		req->cmd = RPC_SRV_P2P_SEND_MESSAGE;
+		req->cmd = EVT_SRV_P2P_SEND_MESSAGE;
 	} else {
-		req->cmd = RPC_P2P_SEND_MESSAGE;
+		req->cmd = EVT_P2P_SEND_MESSAGE;
 	}
 
 	// k_nSteamNetworkingSend_Unreliable = 0, _NoNagle = 1, _NoDelay = 4, _Reliable = 8.
@@ -575,7 +577,7 @@ static bool NET_SDR_SendPacket( const socket_t *socket, const void *data, size_t
 	req->count = length;
 	req->handle = socket->steam_handle;
 	memcpy(req->buffer, data, length);
-	int sent = STEAMSHIM_sendRPC(req, sizeof (struct send_message_req_s) + length, NULL, NULL, NULL);
+	int sent = STEAMSHIM_sendEVT(req, sizeof (struct send_message_evt_s) + length);
 	free(req);
 
 	if( sent != 0 ) {
