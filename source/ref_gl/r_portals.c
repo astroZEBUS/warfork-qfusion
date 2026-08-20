@@ -247,7 +247,7 @@ static void R_DrawPortalSurface( portalSurface_t *portalSurface )
 			continue;
 
 		d = PlaneDiff( ent->origin, untransformed_plane );
-		if( ( d >= -64 ) && ( d <= 64 ) && DotProduct( &ent->axis[AXIS_FORWARD], untransformed_plane->normal ) > 0.9f )
+		if( ( d >= -64 ) && ( d <= 64 ) )
 		{
 			d = Distance( ent->origin, portal_centre );
 			if( d < best_d )
