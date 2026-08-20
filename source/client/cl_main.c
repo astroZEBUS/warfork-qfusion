@@ -398,6 +398,11 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 		break;
 	case SOCKET_SDR:
 		{
+			// CL_Disconnect skips its NET_CloseSocket when it is already CA_DISCONNECTED,
+			// so the previous connection's receive ring can still be hanging off this
+			// socket. close first, or the buffer = NULL below leaks it
+			NET_CloseSocket( &cls.socket_sdr );
+
 			cls.socket = &cls.socket_sdr;
 			cls.socket->address = *address;
 			cls.socket->type = SOCKET_SDR;
@@ -406,8 +411,12 @@ static void CL_Connect( const char *servername, socket_type_t type, netadr_t *ad
 			cls.socket->connected = false;
 			cls.socket->server = false;
 			cls.socket->steam_handle = 0;
+			cls.socket->buffer = NULL;
 			cls.reliable = false;
-			
+
+			// packets that arrive inside the waitDispatchSync below are dropped: steam_handle
+			// is only assigned when the RPC returns, and that is what the receive event is
+			// matched against
 			uint32_t sync;
 			struct p2p_connect_req_s req;
 			req.cmd = RPC_P2P_CONNECT;
@@ -658,7 +667,7 @@ static void CL_Rcon_f( void )
 		address = &cls.rconaddress;
 	}
 
-	NET_SendPacket( socket, message, (int)strlen( message )+1, address );
+	NET_SendPacket( socket, message, (int)strlen( message )+1, address, NET_SEND_UNRELIABLE );
 }
 
 /*
@@ -2178,33 +2187,66 @@ static void CL_RPC_cb_persona( void *self, struct steam_rpc_pkt_s *rec )
 	}
 }
 
+/*
+* CL_EVT_cb_connection_changed
+*
+* Matched against cls.socket_sdr rather than cls.socket, and only when it is really an SDR
+* socket: steam_handle shares a union with the plain socket handle, so a UDP descriptor that
+* happens to equal an hConn would otherwise have its open flag flipped by a relay event.
+* socket_sdr is also stable storage, where cls.socket is NULL between connections.
+*/
 static void CL_EVT_cb_connection_changed(void *self, struct steam_evt_pkt_s *pkt) {
 	struct p2p_net_connection_changed_evt_s *evt = &pkt->p2p_net_connection_changed;
-	const bool matches = cls.socket && (cls.socket->steam_handle == evt->hConn);
-	if(matches) {
-		switch(evt->state) {
-			case STEAMSHIM_ESteamNetworkingConnectionState_Connected:
-				cls.socket->connected = true;
-				cls.socket->open = true;
-				break;
-			// Without this, a dropped SDR connection leaves cls.socket->open=true,
-			// so NET_GetPacket keeps polling a dead handle and the client gets stuck
-			// in CA_CONNECTING / CA_ACTIVE forever.
-			case STEAMSHIM_ESteamNetworkingConnectionState_None:
-			case STEAMSHIM_ESteamNetworkingConnectionState_ClosedByPeer:
-			case STEAMSHIM_ESteamNetworkingConnectionState_ProblemDetectedLocally:
-			case STEAMSHIM_ESteamNetworkingConnectionState_FinWait:
-			case STEAMSHIM_ESteamNetworkingConnectionState_Linger:
-			case STEAMSHIM_ESteamNetworkingConnectionState_Dead:
-				cls.socket->open = false;
-				cls.socket->connected = false;
-				break;
-			case STEAMSHIM_ESteamNetworkingConnectionState_Connecting:
-			case STEAMSHIM_ESteamNetworkingConnectionState_FindingRoute:
-				cls.socket->open = true;
-				break;
-		}
+
+	if( evt->hConn == 0 )
+		return;
+	if( cls.socket_sdr.type != SOCKET_SDR || cls.socket_sdr.steam_handle != evt->hConn )
+		return;
+
+	switch(evt->state) {
+		case STEAMSHIM_ESteamNetworkingConnectionState_Connected:
+			cls.socket_sdr.connected = true;
+			cls.socket_sdr.open = true;
+			break;
+		// Without this, a dropped SDR connection leaves open=true, so NET_GetPacket keeps
+		// polling a dead handle and the client gets stuck in CA_CONNECTING / CA_ACTIVE
+		// forever.
+		case STEAMSHIM_ESteamNetworkingConnectionState_None:
+		case STEAMSHIM_ESteamNetworkingConnectionState_ClosedByPeer:
+		case STEAMSHIM_ESteamNetworkingConnectionState_ProblemDetectedLocally:
+		case STEAMSHIM_ESteamNetworkingConnectionState_FinWait:
+		case STEAMSHIM_ESteamNetworkingConnectionState_Linger:
+		case STEAMSHIM_ESteamNetworkingConnectionState_Dead:
+			cls.socket_sdr.open = false;
+			cls.socket_sdr.connected = false;
+			break;
+		case STEAMSHIM_ESteamNetworkingConnectionState_Connecting:
+		case STEAMSHIM_ESteamNetworkingConnectionState_FindingRoute:
+			cls.socket_sdr.open = true;
+			break;
 	}
+}
+
+/*
+* CL_EVT_cb_recv_messages
+*
+* Stages inbound relay datagrams into the socket's receive ring for NET_GetPacket to pop.
+*
+* Matched against cls.socket_sdr rather than cls.socket: cls.socket is NULL between a disconnect
+* and the next connect, and can point at a UDP socket while a stale relay event is still in
+* flight. socket_sdr is stable storage, and NET_CloseSocket zeroes its steam_handle, so a closed
+* connection cannot match a live handle.
+*/
+static void CL_EVT_cb_recv_messages( void *self, struct steam_evt_pkt_s *pkt )
+{
+	struct recv_messages_evt_s *evt = &pkt->recv_messages;
+
+	if( evt->handle == 0 )
+		return;
+	if( cls.socket_sdr.type != SOCKET_SDR || cls.socket_sdr.steam_handle != evt->handle )
+		return;
+
+	NET_SDR_StagePacket( &cls.socket_sdr, evt );
 }
 
 /*
@@ -2307,6 +2349,7 @@ static void CL_InitLocal( void )
 		STEAMSHIM_sendRPC(&request,sizeof(struct steam_rpc_shim_common_s), steam_id , CL_RPC_cb_steam_id, &syncIndex);
 	}
 	STEAMSHIM_subscribeEvent(EVT_P2P_CONNECTION_CHANGED, NULL, CL_EVT_cb_connection_changed);
+	STEAMSHIM_subscribeEvent(EVT_P2P_RECV_MESSAGES, NULL, CL_EVT_cb_recv_messages);
 	STEAMSHIM_waitDispatchSync(syncIndex);
 
 	Cvar_Get( "clan", "", CVAR_USERINFO | CVAR_ARCHIVE );
@@ -2389,6 +2432,7 @@ static void CL_ShutdownLocal( void )
 	Cmd_RemoveCommand( "quit" );
 	Cmd_RemoveCommand( "connect" );
 	STEAMSHIM_unsubscribeEvent(EVT_P2P_CONNECTION_CHANGED, CL_EVT_cb_connection_changed);
+	STEAMSHIM_unsubscribeEvent(EVT_P2P_RECV_MESSAGES, CL_EVT_cb_recv_messages);
 #if defined(TCP_ALLOW_CONNECT)
 	Cmd_RemoveCommand( "tcpconnect" );
 #endif
@@ -2572,11 +2616,12 @@ void CL_UpdateSnapshot( void )
 /*
 * CL_Netchan_Transmit
 */
-void CL_Netchan_Transmit( msg_t *msg )
+void CL_Netchan_Transmit( msg_t *msg, int flags )
 {
 	int zerror;
 
-	// if we got here with unsent fragments, fire them all now
+	// if we got here with unsent fragments, fire them all now. those keep the flags they were
+	// queued with, not ours
 	Netchan_PushAllFragments( &cls.netchan );
 
 	// do not enable client compression until I fix the compression+fragmentation rare case bug
@@ -2589,7 +2634,7 @@ void CL_Netchan_Transmit( msg_t *msg )
 		}
 	}
 
-	Netchan_Transmit( &cls.netchan, msg );
+	Netchan_Transmit( &cls.netchan, msg, flags );
 	cls.lastPacketSentTime = cls.realtime;
 }
 
@@ -2673,7 +2718,14 @@ void CL_SendMessagesToServer( bool sendNow )
 			//write up the clc commands
 			CL_UpdateClientCommandsToServer( &message );
 			if( message.cursize > 0 )
-				CL_Netchan_Transmit( &message );
+			{
+				// everything on this branch is a reliable command - nextdl while a file is
+				// coming down, handshake chatter otherwise. none of it is time critical and
+				// all of it has to arrive, so the whole branch goes out reliable. keeping it
+				// on one lane also matters: the netchan drops anything that arrives out of
+				// sequence, so mixing lanes on a connection would lose packets outright
+				CL_Netchan_Transmit( &message, NET_SEND_RELIABLE );
+			}
 		}
 	}
 	else if( sendNow || CL_MaxPacketsReached() )
@@ -2693,7 +2745,7 @@ void CL_SendMessagesToServer( bool sendNow )
 		CL_UpdateClientCommandsToServer( &message );
 		CL_WriteUcmdsToMessage( &message );
 		if( message.cursize > 0 )
-			CL_Netchan_Transmit( &message );
+			CL_Netchan_Transmit( &message, NET_SEND_UNRELIABLE );
 	}
 }
 
@@ -2705,7 +2757,7 @@ static void CB_RPC_GetVoice( void *self, struct steam_rpc_pkt_s *rec )
 	MSG_WriteByte(&msg, clc_voice);
 	MSG_WriteShort(&msg, rec->getvoice_recv.count);
 	MSG_WriteData(&msg, rec->getvoice_recv.buffer, rec->getvoice_recv.count);
-	CL_Netchan_Transmit(&msg);
+	CL_Netchan_Transmit( &msg, NET_SEND_UNRELIABLE );
 }
 
 static void CL_SendVoiceData() {
@@ -3191,6 +3243,9 @@ void CL_Shutdown( void )
 	CL_Disconnect( NULL );
 	NET_CloseSocket( &cls.socket_udp );
 	NET_CloseSocket( &cls.socket_udp6 );
+	// CL_Disconnect above normally covers this, but it is the only thing that frees the SDR
+	// receive ring now that NET_Shutdown no longer keeps a table of sockets to sweep
+	NET_CloseSocket( &cls.socket_sdr );
 	// TOCHECK: Shouldn't we close the TCP socket too?
 	if( cls.servername )
 	{

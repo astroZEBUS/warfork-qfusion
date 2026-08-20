@@ -26,6 +26,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 msg_t tmpMessage;
 uint8_t tmpMessageData[MAX_MSGLEN];
 
+// most bytes SV_SendClientDownloads will hand one client in a single pass. every block is
+// fragmented into individual steam sends and each of those is a blocking write into the shim's
+// 64k pipe, so a bigger burst than this stalls the server on the shim child
+#define DOWNLOAD_PUMP_BURST 32768
+
 
 
 //=============================================================================
@@ -272,16 +277,104 @@ bool SV_SendClientsFragments( void )
 		if( !client->netchan.unsentFragments )
 			continue;
 
-		if( !Netchan_TransmitNextFragment( &client->netchan ) )
+		do
 		{
-			Com_Printf( "Error sending fragment to %s: %s\n", NET_AddressToString( &client->netchan.remoteAddress ),
-				NET_ErrorString() );
-			if( client->reliable )
-				SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending fragment: %s\n", NET_ErrorString() );
-			continue;
-		}
+			if( !Netchan_TransmitNextFragment( &client->netchan ) )
+			{
+				Com_Printf( "Error sending fragment to %s: %s\n", NET_AddressToString( &client->netchan.remoteAddress ),
+					NET_ErrorString() );
+				if( client->reliable )
+					SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending fragment: %s\n", NET_ErrorString() );
+				break;
+			}
 
-		sent = true;
+			sent = true;
+		}
+		while( client->state != CS_SPAWNED && client->netchan.unsentFragments );
+	}
+
+	return sent;
+}
+
+/*
+* SV_SendClientDownloads
+*
+* Pushes download chunks to every client with a transfer open, ahead of their acks. A client
+* only reports once its base has advanced by a quarter of the window, so nothing else would
+* drive the transfer. Returns whether anything went out.
+*
+* Runs from SV_RunGameFrame, after SV_SendClientsFragments, so a message is only ever queued on
+* an empty fragment train.
+*/
+bool SV_SendClientDownloads( void )
+{
+	client_t *client;
+	int i;
+	bool sent = false;
+
+	for( i = 0, client = svs.clients; i < sv_maxclients->integer; i++, client++ )
+	{
+		int budget;
+
+		if( client->state == CS_FREE || client->state == CS_ZOMBIE )
+			continue;
+		if( client->edict && ( client->edict->r.svflags & SVF_FAKECLIENT ) )
+			continue;
+		// only the game-connection path has a file open - one taking the file over HTTP is not
+		// ours to feed
+		if( !client->download.file || !client->download.name )
+			continue;
+		// the netchan holds a single unsentBuffer, so let SV_SendClientsFragments drain what is
+		// already queued before adding to it
+		if( client->netchan.unsentFragments )
+			continue;
+
+		// how much this client may be handed this frame. the window bounds what is in flight;
+		// this bounds the burst, because every message is fragmented into individual steam sends
+		// and each of those is a blocking write into the shim's 64k pipe. overrunning it stalls
+		// the whole server on the shim child
+		budget = DOWNLOAD_PUMP_BURST;
+		if( sv_download_rate->integer > 0 )
+		{
+			int allowance;
+
+			if( !client->download.rateTime )
+				client->download.rateTime = svs.realtime;
+			allowance = (int)( ( (int64_t)sv_download_rate->integer * 1024
+				* (int64_t)( svs.realtime - client->download.rateTime ) ) / 1000 );
+			if( allowance < budget )
+				budget = allowance;
+		}
+		client->download.rateTime = svs.realtime;
+
+		while( budget > 0 && SV_DownloadHasWork( client ) )
+		{
+			int n = SV_EmitDownloadChunks( client );
+
+			// no payload went out. either pending reliable commands ate the headroom - in which
+			// case they have just been sent on their own and next frame has room - or the read
+			// failed. either way stop, so this can never spin inside one frame
+			if( n <= 0 )
+				break;
+
+			budget -= n;
+			sent = true;
+
+			// a message larger than FRAGMENT_SIZE leaves the netchan holding the rest of its
+			// fragments, and there is only one unsentBuffer - so flush them here rather than
+			// waiting for the next SV_SendClientsFragments, or the loop could only ever place
+			// one message per frame and the burst budget above would mean nothing
+			if( client->netchan.unsentFragments && !Netchan_PushAllFragments( &client->netchan ) )
+			{
+				Com_Printf( "Error sending download fragment to %s: %s\n", client->name, NET_ErrorString() );
+				SV_DropClient( client, DROP_TYPE_GENERAL, "Error sending fragment: %s\n", NET_ErrorString() );
+				break;
+			}
+
+			// a client dropped mid-push takes its download with it
+			if( client->state == CS_FREE || client->state == CS_ZOMBIE || !client->download.file )
+				break;
+		}
 	}
 
 	return sent;
@@ -290,11 +383,12 @@ bool SV_SendClientsFragments( void )
 /*
 * SV_Netchan_Transmit
 */
-bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg )
+bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg, int flags )
 {
 	int zerror;
 
-	// if we got here with unsent fragments, fire them all now
+	// if we got here with unsent fragments, fire them all now. those keep the flags they were
+	// queued with, not ours
 	if( !Netchan_PushAllFragments( netchan ) )
 		return false;
 
@@ -307,7 +401,7 @@ bool SV_Netchan_Transmit( netchan_t *netchan, msg_t *msg )
 		}
 	}
 
-	return Netchan_Transmit( netchan, msg );
+	return Netchan_Transmit( netchan, msg, flags );
 }
 
 /*
@@ -334,7 +428,7 @@ void SV_InitClientMessage( client_t *client, msg_t *msg, uint8_t *data, size_t s
 /*
 * SV_SendMessageToClient
 */
-bool SV_SendMessageToClient( client_t *client, msg_t *msg )
+bool SV_SendMessageToClient( client_t *client, msg_t *msg, int flags )
 {
 	assert( client );
 
@@ -343,7 +437,7 @@ bool SV_SendMessageToClient( client_t *client, msg_t *msg )
 
 	// transmit the message data
 	client->lastPacketSentTime = svs.realtime;
-	return SV_Netchan_Transmit( &client->netchan, msg );
+	return SV_Netchan_Transmit( &client->netchan, msg, flags );
 }
 
 /*
@@ -419,7 +513,7 @@ static bool SV_SendClientDatagram( client_t *client )
 
 	SV_WriteFrameSnapToClient( client, &tmpMessage );
 
-	return SV_SendMessageToClient( client, &tmpMessage );
+	return SV_SendMessageToClient( client, &tmpMessage, NET_SEND_UNRELIABLE );
 }
 
 /*
@@ -467,7 +561,11 @@ void SV_SendClientMessages( void )
 			{
 				SV_InitClientMessage( client, &tmpMessage, NULL, 0 );
 				SV_AddReliableCommandsToMessage( client, &tmpMessage );
-				if( !SV_SendMessageToClient( client, &tmpMessage ) )
+				// reliable, to match the download blocks this client may be receiving. the
+				// netchan discards anything that arrives out of sequence, so an unreliable
+				// packet overtaking a queued reliable one would cost the download block it
+				// jumped ahead of - the exact stall the reliable send is there to avoid
+				if( !SV_SendMessageToClient( client, &tmpMessage, NET_SEND_RELIABLE ) )
 				{
 					Com_Printf( "Error sending message to %s: %s\n", client->name, NET_ErrorString() );
 					if( client->reliable )

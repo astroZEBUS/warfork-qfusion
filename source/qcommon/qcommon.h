@@ -268,6 +268,7 @@ enum clc_ops_e
 	clc_extension,
 	clc_voice,
 	clc_steamauth,
+	clc_dlack,				// download selective ack: [byte] id [long] base [4 longs] bitset
 };
 
 //==============================================
@@ -514,6 +515,47 @@ NET
 #define	FRAGMENT_LAST		(	 1<<14 )
 #define	FRAGMENT_BIT			( 1<<31 )
 
+//
+// server downloads
+//
+// the file is cut into fixed size chunks so that a chunk has an index that stays the same
+// across retransmits, which is what makes a selective ack possible at all. 1024 keeps a chunk
+// inside a single netchan fragment, so on a transport that can lose one a dropped packet costs
+// one chunk rather than a whole multi-fragment message
+#define DOWNLOAD_CHUNK_SIZE		1024
+// the ack carries a base chunk plus a bitset naming the chunks above it the client already
+// holds. two uint64 is the whole bitset, so nothing past base+DOWNLOAD_ACK_BITS can ever be
+// reported and the window must stay at or under it
+#define DOWNLOAD_ACK_BITS		128
+#define DOWNLOAD_ACK_MASK		( DOWNLOAD_ACK_BITS - 1 )
+// both sides hold their chunks in a DOWNLOAD_ACK_BITS slot ring indexed by ( chunk & MASK ), so
+// the window has to stay one short of the ring or chunk base and chunk base+DOWNLOAD_ACK_BITS
+// would land in the same slot
+#define DOWNLOAD_MAX_WINDOW		( DOWNLOAD_ACK_BITS - 1 )
+// most chunks packed into one netchan message
+#define DOWNLOAD_MAX_RUN_CHUNKS	16
+// how many chunks past a gap have to turn up before the gap counts as a loss rather than as
+// something merely running late. without it a transport that reorders even slightly makes the
+// server resend chunks that were already on their way
+#define DOWNLOAD_REORDER_SLACK	8
+// and however many chunks turned up after it, a chunk this recently sent is not resent either -
+// the ack naming it as a gap cannot yet reflect anything that happened less than a round trip
+// ago. roughly one relay round trip
+#define DOWNLOAD_FAST_DELAY		100
+// how long an unacknowledged chunk sits before it goes out again on its own. the ack bitset
+// normally catches a loss well before this - it names the hole as soon as anything past it
+// arrives - but nothing names a lost retransmit, or a lost ack, so there has to be a timer
+#define DOWNLOAD_RTO			600
+// svc_download header: opcode, download id, chunk index, chunk length
+#define DOWNLOAD_CHUNK_HEADER	( 1 + 1 + 4 + 2 )
+
+// bitset over uint64_t w[2], indexed by a chunk's ring slot ( chunk & DOWNLOAD_ACK_MASK ).
+// a bit for chunk c is only ever set while c is inside [base, base+DOWNLOAD_ACK_BITS) and is
+// cleared as the base passes it, so a slot can never be mistaken for a newer chunk
+#define DL_BitGet( w, i )		( ( (w)[( i ) >> 6] >> ( ( i ) & 63 ) ) & (uint64_t)1 )
+#define DL_BitSet( w, i )		( (w)[( i ) >> 6] |= (uint64_t)1 << ( ( i ) & 63 ) )
+#define DL_BitClear( w, i )		( (w)[( i ) >> 6] &= ~( (uint64_t)1 << ( ( i ) & 63 ) ) )
+
 typedef enum
 {
 	NA_NOTRANSMIT,      // wsw : jal : fakeclients
@@ -557,6 +599,16 @@ typedef enum
 #endif
 } socket_type_t;
 
+// Receive staging for a transport that has no socket to read from on demand - SOCKET_SDR, whose
+// datagrams are pushed at us by the steam shim. Frames are appended at end and taken from start;
+// the consumed prefix is reclaimed when the space is needed. net.c owns the contents.
+struct socket_ring_buffer_s {
+	size_t reserve;
+	size_t start;
+	size_t end;
+	char buffer[];
+};
+
 typedef struct
 {
 	bool open;
@@ -569,6 +621,7 @@ typedef struct
 	bool connected;
 #endif
 	netadr_t remoteAddress;
+	struct socket_ring_buffer_s* buffer;
 	union {
 		socket_steam_handle_t steam_handle;
 		socket_handle_t handle;
@@ -607,8 +660,29 @@ bool		NET_Listen( const socket_t *socket );
 int			NET_Accept( const socket_t *socket, socket_t *newsocket, netadr_t *address );
 #endif
 
+struct recv_messages_evt_s;	// steamshim/src/steamshim_types.h
+
+// SDR sockets are hand-initialized rather than opened through NET_OpenSocket, and the shim's
+// receive event only names an HSteamNetConnection. The module that owns the socket resolves the
+// handle - it is the one tracking them - and stages the payload here; net.c owns the receive
+// buffer from there on, and NET_CloseSocket is the only thing that frees it.
+//
+// A socket_t must have buffer set to NULL before it is first staged into.
+void		NET_SDR_StagePacket( socket_t *socket, const struct recv_messages_evt_s *evt );
+
+// NET_SendPacket transmission flags. Only SOCKET_SDR looks at these; the other transports have
+// no say in how a datagram is delivered, so they ignore them.
+//
+// NET_SEND_RELIABLE asks steam to retransmit the message until it arrives. It belongs on a
+// message that nothing else can recover - a file transfer block is the case that matters, since
+// the netchan does not retransmit message bodies and a loss costs a 3 second application level
+// retry. It must not be used for snapshots: the netchan already tolerates their loss by delta
+// compression, and reliable delivery would only add head of line blocking.
+#define NET_SEND_UNRELIABLE 0
+#define NET_SEND_RELIABLE   1
+
 int			NET_GetPacket( const socket_t *socket, netadr_t *address, msg_t *message );
-bool		NET_SendPacket( const socket_t *socket, const void *data, size_t length, const netadr_t *address );
+bool		NET_SendPacket( const socket_t *socket, const void *data, size_t length, const netadr_t *address, int flags );
 
 int			NET_Get( const socket_t *socket, netadr_t *address, void *data, size_t length );
 int         NET_Send( const socket_t *socket, const void *data, size_t length, const netadr_t *address );
@@ -669,6 +743,9 @@ typedef struct
 	size_t unsentLength;
 	uint8_t unsentBuffer[MAX_MSGLEN];
 	bool unsentIsCompressed;
+	// NET_SEND_* flags latched from Netchan_Transmit. fragments are spaced out over later
+	// frames, by which time the caller that chose the flags is long gone
+	int unsentFlags;
 
 	bool fatal_error;
 } netchan_t;
@@ -680,7 +757,7 @@ void Netchan_Init( void );
 void Netchan_Shutdown( void );
 void Netchan_Setup( netchan_t *chan, const socket_t *socket, const netadr_t *address, int qport );
 bool Netchan_Process( netchan_t *chan, msg_t *msg );
-bool Netchan_Transmit( netchan_t *chan, msg_t *msg );
+bool Netchan_Transmit( netchan_t *chan, msg_t *msg, int flags );
 bool Netchan_PushAllFragments( netchan_t *chan );
 bool Netchan_TransmitNextFragment( netchan_t *chan );
 int Netchan_CompressMessage( msg_t *msg );
@@ -973,7 +1050,7 @@ void CL_Disconnect( const char *message );
 void CL_Shutdown( void );
 void CL_Frame( int realmsec, int gamemsec );
 void CL_ParseServerMessage( msg_t *msg );
-void CL_Netchan_Transmit( msg_t *msg );
+void CL_Netchan_Transmit( msg_t *msg, int flags );
 void Con_Print( const char *text );
 void SCR_BeginLoadingPlaque( void );
 
@@ -981,7 +1058,7 @@ void SV_Init( void );
 void SV_Shutdown( const char *finalmsg );
 void SV_ShutdownGame( const char *finalmsg, bool reconnect );
 void SV_Frame( int realmsec, int gamemsec );
-bool SV_SendMessageToClient( struct client_s *client, msg_t *msg );
+bool SV_SendMessageToClient( struct client_s *client, msg_t *msg, int flags );
 void SV_ParseClientMessage( struct client_s *client, msg_t *msg );
 
 /*

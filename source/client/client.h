@@ -164,6 +164,22 @@ typedef struct
 	int retries;
 	size_t baseoffset;				// for download speed calculation when resuming downloads
 
+	// the file arrives as fixed size chunks that may turn up in any order, so what is on disk
+	// (offset) and what has actually been received are two different numbers. chunks past the
+	// hole are held in reorder until baseChunk catches up, because the temp file is opened
+	// FS_APPEND: writes land at EOF whatever FS_Seek is told, and FS_Seek refuses to go past the
+	// length the file had when it was opened
+	int dlId;						// generation from initdownload, echoed in every ack
+	size_t numChunks;
+	size_t baseChunk;				// first chunk not yet written to the file
+	size_t bytesReceived;			// including the resumed prefix; drives the percentage
+	size_t resumeSkip;				// bytes of baseChunk already on disk when we opened the file
+	uint64_t bits[2];				// ring, bit ( c & DOWNLOAD_ACK_MASK ) means chunk c is buffered
+	uint8_t *reorder;				// ring of DOWNLOAD_ACK_BITS chunk slots
+	size_t ackChunks;				// base progress between acks, as told by initdownload
+	size_t lastAckChunk;			// baseChunk when the last ack went out
+	unsigned int ackFlushTime;		// when a partial-window ack has to go out anyway
+
 	// web download
 	bool web;
 	char *web_url;					// download URL, passed by the server
@@ -393,7 +409,7 @@ void CL_Quit( void );
 
 void CL_UpdateClientCommandsToServer( msg_t *msg );
 void CL_AddReliableCommand( /*const*/ char *cmd );
-void CL_Netchan_Transmit( msg_t *msg );
+void CL_Netchan_Transmit( msg_t *msg, int flags );
 void CL_SendMessagesToServer( bool sendNow );
 void CL_RestartTimeDeltas( unsigned int newTimeDelta );
 void CL_AdjustServerTime( unsigned int gamemsec );

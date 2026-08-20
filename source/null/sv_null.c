@@ -38,7 +38,7 @@ void SV_Frame( int realmsec, int gamemsec )
 {
 }
 
-bool SV_SendMessageToClient( struct client_s *client, msg_t *msg )
+bool SV_SendMessageToClient( struct client_s *client, msg_t *msg, int flags )
 {
 	return true;
 }

@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "tracy/TracyC.h"
 
 static void CL_InitServerDownload( const char *filename, int size, unsigned checksum, bool allow_localhttpdownload,
-							const char *url, bool initial );
+							const char *url, bool initial, int dlId, int ackchunks );
 void CL_StopServerDownload( void );
 
 //=============================================================================
@@ -329,12 +329,98 @@ static size_t CL_WebDownloadReadCb( const void *buf, size_t numb, float percenta
 }
 
 /*
+* CL_CollapseUrlSlashes
+*
+* Collapses runs of '/' in the path of an url, in place. The "//" of the scheme and
+* everything from the query delimiter on are left alone.
+*
+* Only touches urls that carry a scheme: without one there's no way to tell a path from
+* a scheme-relative "//host/path", whose leading "//" must survive.
+*/
+static char *CL_CollapseUrlSlashes( char *url )
+{
+	char *src, *dst;
+
+	src = strstr( url, "://" );
+	if( !src )
+		return url;
+	src += 3;
+	dst = src;
+
+	while( *src && *src != '?' && *src != '#' ) {
+		*dst++ = *src++;
+		if( src[-1] == '/' ) {
+			while( *src == '/' )
+				src++;
+		}
+	}
+
+	if( dst != src )
+		memmove( dst, src, strlen( src ) + 1 );
+
+	return url;
+}
+
+/*
+* CL_SendDownloadAck
+*
+* Reports what we hold: the first chunk we are still missing, and a bitset naming the chunks
+* above it that already arrived. This is absolute state rather than a delta, so it is safe to
+* lose, to reorder and to repeat - which is the whole reason the download survives a transport
+* that does any of those.
+*
+* It goes out as its own packet rather than riding the next message to the server: piggybacking
+* would mean waiting on CL_SendMessagesToServer's 100ms connecting-state gate, which on its own
+* would cap the window from refilling more than ten times a second.
+*/
+static void CL_SendDownloadAck( void )
+{
+	uint8_t data[64];
+	msg_t msg;
+	uint64_t bits[2] = { 0, 0 };
+	int i;
+
+	// the netchan is only set up from CA_CONNECTED on, and a download parsed out of a demo is
+	// ignored - so neither ever has an ack to send
+	if( cls.state < CA_CONNECTED || cls.demo.playing )
+		return;
+
+	cls.download.lastAckChunk = cls.download.baseChunk;
+	cls.download.ackFlushTime = 0;
+
+	// bit i names chunk baseChunk+1+i. baseChunk itself is by definition the one we are missing
+	for( i = 0; i < DOWNLOAD_MAX_WINDOW; i++ )
+	{
+		size_t c = cls.download.baseChunk + 1 + i;
+
+		if( DL_BitGet( cls.download.bits, c & DOWNLOAD_ACK_MASK ) )
+			DL_BitSet( bits, i );
+	}
+
+	MSG_Init( &msg, data, sizeof( data ) );
+	MSG_Clear( &msg );
+
+	MSG_WriteByte( &msg, clc_dlack );
+	MSG_WriteByte( &msg, cls.download.dlId );
+	MSG_WriteLong( &msg, (int)cls.download.baseChunk );
+	MSG_WriteLong( &msg, (int)(uint32_t)bits[0] );
+	MSG_WriteLong( &msg, (int)(uint32_t)( bits[0] >> 32 ) );
+	MSG_WriteLong( &msg, (int)(uint32_t)bits[1] );
+	MSG_WriteLong( &msg, (int)(uint32_t)( bits[1] >> 32 ) );
+
+	// the lane has to match whatever the rest of this connection's messages use: everything sent
+	// while connecting goes reliable and everything sent while spawned goes unreliable, and the
+	// netchan drops anything that arrives out of sequence, so mixing lanes would lose packets
+	CL_Netchan_Transmit( &msg, cls.state < CA_ACTIVE ? NET_SEND_RELIABLE : NET_SEND_UNRELIABLE );
+}
+
+/*
 * CL_InitServerDownload
 *
 * Handles server's initdownload message, starts web or server download if possible
 */
 static void CL_InitServerDownload( const char *filename, int size, unsigned checksum, bool allow_localhttpdownload,
-							  const char *url, bool initial )
+							  const char *url, bool initial, int dlId, int ackchunks )
 {
 	int alloc_size;
 	const char *baseurl;
@@ -511,6 +597,15 @@ static void CL_InitServerDownload( const char *filename, int size, unsigned chec
 	cls.download.offset = 0;
 	cls.download.baseoffset = 0;
 	cls.download.pending_reconnect = false;
+	cls.download.dlId = dlId;
+	cls.download.numChunks = ( (size_t)size + DOWNLOAD_CHUNK_SIZE - 1 ) / DOWNLOAD_CHUNK_SIZE;
+	cls.download.baseChunk = 0;
+	cls.download.bytesReceived = 0;
+	cls.download.resumeSkip = 0;
+	cls.download.bits[0] = cls.download.bits[1] = 0;
+	cls.download.ackChunks = ackchunks > 0 ? (size_t)ackchunks : 8;
+	cls.download.lastAckChunk = 0;
+	cls.download.ackFlushTime = 0;
 
 	Cvar_ForceSet( "cl_download_name", COM_FileBase( filename ) );
 	Cvar_ForceSet( "cl_download_percent", "0" );
@@ -576,6 +671,11 @@ static void CL_InitServerDownload( const char *filename, int size, unsigned chec
 			Q_urlencode_unsafechars( filename, fullurl + url_len + 1, alloc_size - url_len - 1 );
 		}
 
+		// either base url may or may not have come with a trailing slash, and we've just
+		// joined another one onto it. must happen before the session headers below, which
+		// match fullurl against cls.httpbaseurl to decide whether to attach them
+		CL_CollapseUrlSlashes( fullurl );
+
 		headers[0] = "Referer";
 		headers[1] = referer;
 
@@ -587,10 +687,36 @@ static void CL_InitServerDownload( const char *filename, int size, unsigned chec
 		return;
 	}
 
+	// we may already hold part of the file. chunks are counted from the start of the file, so
+	// resume at the last whole chunk on disk - and remember the bytes of the chunk after it that
+	// are already there, because the file can only be appended to and that chunk will arrive in
+	// full. this is the one place resumeSkip is ever non-zero
+	cls.download.baseChunk = cls.download.offset / DOWNLOAD_CHUNK_SIZE;
+	cls.download.resumeSkip = cls.download.offset % DOWNLOAD_CHUNK_SIZE;
+	cls.download.bytesReceived = cls.download.offset;
+	cls.download.lastAckChunk = cls.download.baseChunk;
+
+	if( cls.download.offset >= cls.download.size || cls.download.baseChunk >= cls.download.numChunks )
+	{
+		// nothing left to fetch, the temp file is already the whole thing
+		Com_Printf( "Download complete: %s\n", cls.download.name );
+		CL_DownloadComplete();
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -1 ) );
+		CL_DownloadDone();
+		return;
+	}
+
+	// chunks past a hole are held here until the base catches up with them
+	cls.download.reorder = Mem_ZoneMalloc( DOWNLOAD_ACK_BITS * DOWNLOAD_CHUNK_SIZE );
+
 	cls.download.timeout = Sys_Milliseconds() + 3000;
 	cls.download.retries = 0;
 
-	CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, cls.download.offset ) );
+	// arms the server's pump at our resume point. always chunk aligned, even when the partial
+	// file on disk is not
+	CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname,
+		(int)( cls.download.baseChunk * DOWNLOAD_CHUNK_SIZE ) ) );
+	CL_SendMessagesToServer( true );
 }
 
 /*
@@ -602,7 +728,8 @@ static void CL_InitDownload_f( void )
 	const char *url;
 	int size;
 	unsigned checksum;
-	bool allow_localhttpdownload;
+	bool allow_localhttpdownload, local_http;
+	int dlId, ackchunks;
 
 	// ignore download commands coming from demo files
 	if( cls.demo.playing )
@@ -612,10 +739,17 @@ static void CL_InitDownload_f( void )
 	filename = Cmd_Argv( 1 );
 	size = atoi( Cmd_Argv( 2 ) );
 	checksum = strtoul( Cmd_Argv( 3 ), NULL, 10 );
-	allow_localhttpdownload = ( atoi( Cmd_Argv( 4 ) ) != 0 ) && cls.httpbaseurl != NULL;
+	local_http = ( atoi( Cmd_Argv( 4 ) ) != 0 );
+	allow_localhttpdownload = local_http && cls.httpbaseurl != NULL;
 	url = Cmd_Argv( 5 );
+	// the download generation, and how far our base has to move before we report again
+	dlId = atoi( Cmd_Argv( 6 ) );
+	ackchunks = atoi( Cmd_Argv( 7 ) );
 
-	CL_InitServerDownload( filename, size, checksum, allow_localhttpdownload, url, true );
+	if( local_http && !allow_localhttpdownload )
+		url = "";
+
+	CL_InitServerDownload( filename, size, checksum, allow_localhttpdownload, url, true, dlId, ackchunks );
 }
 
 
@@ -645,12 +779,22 @@ void CL_StopServerDownload( void )
 	Mem_ZoneFree( cls.download.web_url );
 	cls.download.web_url = NULL;
 
+	Mem_ZoneFree( cls.download.reorder );
+	cls.download.reorder = NULL;
+
 	cls.download.offset = 0;
 	cls.download.size = 0;
 	cls.download.percent = 0;
 	cls.download.timeout = 0;
 	cls.download.retries = 0;
 	cls.download.web = false;
+	cls.download.dlId = 0;
+	cls.download.numChunks = 0;
+	cls.download.baseChunk = 0;
+	cls.download.bytesReceived = 0;
+	cls.download.resumeSkip = 0;
+	cls.download.bits[0] = cls.download.bits[1] = 0;
+	cls.download.ackFlushTime = 0;
 
 	Cvar_ForceSet( "cl_download_name", "" );
 	Cvar_ForceSet( "cl_download_percent", "0" );
@@ -668,13 +812,16 @@ static void CL_RetryDownload( void )
 		Com_Printf( "Download timed out: %s\n", cls.download.name );
 
 		// let the server know we're done
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) );
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -2 ) );
 		CL_DownloadDone();
 	}
 	else
 	{
 		cls.download.timeout = Sys_Milliseconds() + 3000;
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, cls.download.offset ) );
+
+		// repeating the ack unchanged is how the server is told nothing is arriving: with no new
+		// information in it, it queues every chunk it has sent and we have not confirmed
+		CL_SendDownloadAck();
 	}
 }
 
@@ -684,6 +831,11 @@ static void CL_RetryDownload( void )
 */
 void CL_CheckDownloadTimeout( void )
 {
+	// a partial window that never accumulates a full ack interval - the tail of the file, or a
+	// hole the server has already filled around - would otherwise sit until the 3 second retry
+	if( cls.download.ackFlushTime && cls.download.ackFlushTime <= Sys_Milliseconds() )
+		CL_SendDownloadAck();
+
 	if( !cls.download.timeout || cls.download.timeout > Sys_Milliseconds() )
 		return;
 
@@ -742,35 +894,63 @@ void CL_DownloadCancel_f( void )
 	cls.download.cancelled = true;
 
 	if( !cls.download.web ) {
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -2 ) ); // let the server know we're done
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -2 ) ); // let the server know we're done
 		CL_DownloadDone();
 	}
 }
 
 /*
+* CL_DownloadFlushChunk / CL_DownloadDrainReorder
+*
+* Writes chunk baseChunk and then everything the reorder ring already holds behind it. The temp
+* file is opened FS_APPEND, so this is the only way bytes ever reach it: strictly in order, one
+* chunk at a time, however scrambled the arrivals were.
+*/
+static void CL_DownloadFlushChunk( const uint8_t *data, size_t len )
+{
+	FS_Write( data + cls.download.resumeSkip, len - cls.download.resumeSkip, cls.download.filenum );
+	cls.download.resumeSkip = 0;
+	cls.download.baseChunk++;
+	cls.download.offset = cls.download.baseChunk * DOWNLOAD_CHUNK_SIZE;
+	if( cls.download.offset > cls.download.size )
+		cls.download.offset = cls.download.size;
+}
+
+static void CL_DownloadDrainReorder( void )
+{
+	while( cls.download.baseChunk < cls.download.numChunks
+		&& DL_BitGet( cls.download.bits, cls.download.baseChunk & DOWNLOAD_ACK_MASK ) )
+	{
+		size_t c = cls.download.baseChunk;
+		size_t len = cls.download.size - c * DOWNLOAD_CHUNK_SIZE;
+
+		if( len > DOWNLOAD_CHUNK_SIZE )
+			len = DOWNLOAD_CHUNK_SIZE;
+
+		DL_BitClear( cls.download.bits, c & DOWNLOAD_ACK_MASK );
+		CL_DownloadFlushChunk( cls.download.reorder + ( c & DOWNLOAD_ACK_MASK ) * DOWNLOAD_CHUNK_SIZE, len );
+	}
+}
+
+/*
 * CL_ParseDownload
-* Handles download message from the server.
-* Writes data to the file and requests next download block.
+* Handles one chunk of the file from the server. Chunks may arrive in any order and more than
+* once; what is on disk only advances when the gap at baseChunk is filled.
 */
 static void CL_ParseDownload( msg_t *msg )
 {
-	size_t size, offset;
-	char *svFilename;
+	size_t chunk, len, expected;
+	int dlId;
+	bool outOfOrder = false;
 	TracyCZoneN( ctx, "CL_ParseDownload", 1 );
 
-	// read the data
-	svFilename = MSG_ReadString( msg );
-	offset = MSG_ReadLong( msg );
-	size = MSG_ReadLong( msg );
+	// read the header. every path below consumes exactly len payload bytes before returning, or
+	// the opcode loop in CL_ParseServerMessage would take one of them for an opcode
+	dlId = MSG_ReadByte( msg );
+	chunk = (size_t)(unsigned)MSG_ReadLong( msg );
+	len = (size_t)( MSG_ReadShort( msg ) & 0xffff );
 
-	if( cls.demo.playing )
-	{
-		// ignore download commands coming from demo files
-		TracyCZoneEnd( ctx );
-		return;
-	}
-
-	if( msg->readcount + size > msg->cursize )
+	if( msg->readcount + len > msg->cursize )
 	{
 		Com_Printf( "Error: Download message didn't have as much data as it promised\n" );
 		CL_RetryDownload();
@@ -778,67 +958,129 @@ static void CL_ParseDownload( msg_t *msg )
 		return;
 	}
 
-	if( !cls.download.filenum )
+	if( cls.demo.playing )
 	{
-		Com_Printf( "Error: Download message while not dowloading\n" );
-		msg->readcount += size;
+		// ignore download commands coming from demo files
+		msg->readcount += len;
 		TracyCZoneEnd( ctx );
 		return;
 	}
 
-	if( Q_stricmp( cls.download.name, svFilename ) )
+	// a chunk from a download that has already been replaced or finished. this is expected -
+	// the server's window may still have been in flight - so it is dropped without counting as
+	// a failure, since five of those in a row would abort the transfer
+	if( !cls.download.filenum || !cls.download.reorder || dlId != cls.download.dlId )
 	{
-		Com_Printf( "Error: Download message for wrong file\n" );
-		msg->readcount += size;
+		msg->readcount += len;
 		TracyCZoneEnd( ctx );
 		return;
 	}
 
-	if( offset+size > cls.download.size )
+	// a chunk is a full DOWNLOAD_CHUNK_SIZE except the last one, so its length is not something
+	// we have to take the server's word for
+	expected = 0;
+	if( chunk < cls.download.numChunks )
+	{
+		expected = cls.download.size - chunk * DOWNLOAD_CHUNK_SIZE;
+		if( expected > DOWNLOAD_CHUNK_SIZE )
+			expected = DOWNLOAD_CHUNK_SIZE;
+	}
+
+	if( chunk >= cls.download.numChunks || len != expected )
 	{
 		Com_Printf( "Error: Invalid download message\n" );
-		msg->readcount += size;
+		msg->readcount += len;
 		CL_RetryDownload();
 		TracyCZoneEnd( ctx );
 		return;
 	}
 
-	if( cls.download.offset != offset )
+	if( chunk < cls.download.baseChunk )
 	{
-		Com_Printf( "Error: Download message for wrong position\n" );
-		msg->readcount += size;
-		CL_RetryDownload();
-		TracyCZoneEnd( ctx );
-		return;
-	}
-
-	FS_Write( msg->data + msg->readcount, size, cls.download.filenum );
-	msg->readcount += size;
-	cls.download.offset += size;
-	cls.download.percent = (double)cls.download.offset / (double)cls.download.size;
-	clamp( cls.download.percent, 0, 1 );
-
-	Cvar_ForceSet( "cl_download_percent", va( "%.1f", cls.download.percent * 100 ) );
-
-	if( cls.download.offset < cls.download.size )
-	{
+		// already on disk, so the server is still missing the ack that said so - either it was
+		// lost or it crossed this in flight. say it again rather than sitting quiet until the
+		// retry timer, which is what would otherwise stall the tail of a transfer for 3 seconds
+		msg->readcount += len;
 		cls.download.timeout = Sys_Milliseconds() + 3000;
-		cls.download.retries = 0;
+		if( !cls.download.ackFlushTime )
+			cls.download.ackFlushTime = Sys_Milliseconds() + 1;
+		TracyCZoneEnd( ctx );
+		return;
+	}
 
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, cls.download.offset ) );
+	if( chunk - cls.download.baseChunk >= DOWNLOAD_ACK_BITS )
+	{
+		// past what the ring can hold and past what we could ever report, so the server has
+		// overrun its window. drop it rather than aliasing another chunk's slot
+		Com_Printf( "Error: Download chunk outside the window\n" );
+		msg->readcount += len;
+		CL_RetryDownload();
+		TracyCZoneEnd( ctx );
+		return;
+	}
+
+	if( chunk == cls.download.baseChunk )
+	{
+		cls.download.bytesReceived += len - cls.download.resumeSkip;
+		CL_DownloadFlushChunk( msg->data + msg->readcount, len );
+		CL_DownloadDrainReorder();
+	}
+	else if( !DL_BitGet( cls.download.bits, chunk & DOWNLOAD_ACK_MASK ) )
+	{
+		memcpy( cls.download.reorder + ( chunk & DOWNLOAD_ACK_MASK ) * DOWNLOAD_CHUNK_SIZE,
+			msg->data + msg->readcount, len );
+		DL_BitSet( cls.download.bits, chunk & DOWNLOAD_ACK_MASK );
+		cls.download.bytesReceived += len;
+		outOfOrder = true;
 	}
 	else
+	{
+		// a duplicate of something already buffered, so likewise: the bit for it is already set
+		// and the server has not heard that
+		msg->readcount += len;
+		cls.download.timeout = Sys_Milliseconds() + 3000;
+		if( !cls.download.ackFlushTime )
+			cls.download.ackFlushTime = Sys_Milliseconds() + 1;
+		TracyCZoneEnd( ctx );
+		return;
+	}
+
+	msg->readcount += len;
+
+	cls.download.percent = cls.download.size
+		? (double)cls.download.bytesReceived / (double)cls.download.size : 1.0;
+	clamp( cls.download.percent, 0, 1 );
+	Cvar_ForceSet( "cl_download_percent", va( "%.1f", cls.download.percent * 100 ) );
+
+	if( cls.download.baseChunk >= cls.download.numChunks )
 	{
 		Com_Printf( "Download complete: %s\n", cls.download.name );
 
 		CL_DownloadComplete();
 
 		// let the server know we're done
-		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.name, -1 ) );
+		CL_AddReliableCommand( va( "nextdl \"%s\" %i", cls.download.origname, -1 ) );
 
 		CL_DownloadDone();
+		TracyCZoneEnd( ctx );
+		return;
 	}
-	TracyCZoneEnd( ctx );
+
+	cls.download.timeout = Sys_Milliseconds() + 3000;
+	cls.download.retries = 0;
+
+	// the ack is only ever armed here, never sent - CL_CheckDownloadTimeout sends it at the end
+	// of the frame. one message carries up to DOWNLOAD_MAX_RUN_CHUNKS chunks and this runs once
+	// per chunk, so sending from here would put a packet on the wire for every chunk in it.
+	//
+	// due immediately once the base has moved a whole interval, and on a chunk that arrived out
+	// of order - that one means something was lost, and the sooner the server is told which, the
+	// sooner it comes back. otherwise a lazy timer, so the tail of the file and any hole the
+	// server has already filled around still get reported without waiting on the 3 second retry
+	if( cls.download.baseChunk - cls.download.lastAckChunk >= cls.download.ackChunks || outOfOrder )
+		cls.download.ackFlushTime = Sys_Milliseconds() + 1;
+	else if( !cls.download.ackFlushTime )
+		cls.download.ackFlushTime = Sys_Milliseconds() + 250;
 }
 
 /*
@@ -944,17 +1186,23 @@ static void CL_ParseServerData( msg_t *msg )
 		else {
 			http_portnum = MSG_ReadShort( msg ) & 0xffff;
 			cls.httpaddress = cls.serveraddress;
-			if( cls.httpaddress.type == NA_IP6 ) {
-				cls.httpaddress.address.ipv6.port = BigShort( http_portnum );
-			} else {
-				cls.httpaddress.address.ipv4.port = BigShort( http_portnum );
-			}
+			NET_SetAddressPort( &cls.httpaddress, http_portnum );
 			if( http_portnum ) {
-				if( cls.httpaddress.type == NA_LOOPBACK ) {
-					cls.httpbaseurl = ZoneCopyString( va( "http://localhost:%hu/", http_portnum ) );
-				}
-				else {
-					cls.httpbaseurl = ZoneCopyString( va( "http://%s/", NET_AddressToString( &cls.httpaddress ) ) );
+				switch( cls.httpaddress.type ) {
+					case NA_LOOPBACK:
+						cls.httpbaseurl = ZoneCopyString( va( "http://localhost:%hu/", http_portnum ) );
+						break;
+					case NA_IP:
+					case NA_IP6:
+						cls.httpbaseurl = ZoneCopyString( va( "http://%s/", NET_AddressToString( &cls.httpaddress ) ) );
+						break;
+					default:
+						// the server's builtin HTTP server only listens on IP sockets, and a relayed
+						// address has no reachable host:port form, so downloads go over the game socket
+						Com_DPrintf( "Server offers HTTP downloads on port %hu, but %s is not an IP address."
+							" Downloading over the game connection instead.\n",
+							http_portnum, NET_AddressToString( &cls.httpaddress ) );
+						break;
 				}
 			}
 		}
@@ -1216,7 +1464,7 @@ static void CL_RPC_cb_steamAuth( void *self, struct steam_rpc_pkt_s *rec ){
 	MSG_WriteByte( &msg, clc_steamauth );
 	MSG_WriteLong( &msg, rec->auth_session.pcbTicket );
 	MSG_WriteData( &msg, rec->auth_session.ticket, rec->auth_session.pcbTicket );
-	CL_Netchan_Transmit( &msg );
+	CL_Netchan_Transmit( &msg, NET_SEND_UNRELIABLE );
 }
 
 static void CL_SteamAuth(){

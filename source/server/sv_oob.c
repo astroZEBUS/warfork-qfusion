@@ -226,7 +226,7 @@ void SV_MasterSendQuit( void )
 		{
 			socket_t *socket = ( master->address.type == NA_IP6 ? &svs.socket_udp6 : &svs.socket_udp );
 
-			NET_SendPacket( socket, ( const uint8_t * )quitMessage, sizeof( quitMessage ), &master->address );
+			NET_SendPacket( socket, ( const uint8_t * )quitMessage, sizeof( quitMessage ), &master->address, NET_SEND_UNRELIABLE );
 		} else if (master->type == MASTER_WARFORK) {
 			socket_t *socket = ( master->address.type == NA_IP6 ? &svs.socket_udp6 : &svs.socket_udp );
 
@@ -234,7 +234,7 @@ void SV_MasterSendQuit( void )
 			MSG_WriteString(&tmpMessage, WARMONGER_MAGIC);
 			MSG_WriteByte(&tmpMessage, WARMONGER_CLOSE_NOTIFY); // close notify
 			MSG_WriteLongLong(&tmpMessage, svs.steamid);
-			NET_SendPacket( socket, tmpMessageData, tmpMessage.cursize, &master->address );
+			NET_SendPacket( socket, tmpMessageData, tmpMessage.cursize, &master->address, NET_SEND_UNRELIABLE );
 		}
 	}
 }
@@ -609,7 +609,7 @@ static void SV_SendWFHeartbeat( const socket_t *socket, const netadr_t *address 
 	char *info = SV_ShortInfoString();
 	MSG_WriteString(&tmpMessage, info);
 
-	NET_SendPacket( socket, tmpMessageData, tmpMessage.cursize, address );
+	NET_SendPacket( socket, tmpMessageData, tmpMessage.cursize, address, NET_SEND_UNRELIABLE );
 }
 
 /*
@@ -652,7 +652,7 @@ void SV_MasterHeartbeat( void )
 				case MASTER_STEAM:
 				{
 					uint8_t steamHeartbeat = 'q';
-					NET_SendPacket( socket, &steamHeartbeat, sizeof( steamHeartbeat ), &master->address );
+					NET_SendPacket( socket, &steamHeartbeat, sizeof( steamHeartbeat ), &master->address, NET_SEND_UNRELIABLE );
 					break;
 				}
 				case MASTER_DARKPLACES:
@@ -980,6 +980,9 @@ if( socket->type == SOCKET_SDR )
 	{
 		svs.incomingp2p[incomingp2p].active = false;
 		svs.incomingp2p[incomingp2p].socket.open = false;
+		// the client copy owns this connection now. clearing the handle keeps the abandoned
+		// slot from matching relay events meant for it
+		svs.incomingp2p[incomingp2p].socket.steam_handle = 0;
 	}
 }
 
@@ -1354,7 +1357,7 @@ bool SV_SteamServerQuery( const char *s, const socket_t *socket, const netadr_t 
 			( dedicated && dedicated->integer ) ? 'd' : 'l',
 			APP_VERSION_MAJOR, APP_VERSION_MINOR,
 			basedir );
-		NET_SendPacket( socket, ( const uint8_t * )msg, strlen( msg ), address );
+		NET_SendPacket( socket, ( const uint8_t * )msg, strlen( msg ), address, NET_SEND_UNRELIABLE );
 
 		return true;
 	}

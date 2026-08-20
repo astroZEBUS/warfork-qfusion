@@ -55,6 +55,7 @@ extern "C" {
 // return of 0 means failure
 int STEAMSHIM_init(SteamshimOptions* options);
 void STEAMSHIM_deinit(void);
+int STEAMSHIM_pollFd(void);
 #ifdef __cplusplus
 }
 #endif

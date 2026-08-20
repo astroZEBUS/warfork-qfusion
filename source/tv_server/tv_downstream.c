@@ -316,7 +316,7 @@ static bool TV_Downstream_Netchan_Transmit( netchan_t *netchan, msg_t *msg )
 		}
 	}
 
-	return Netchan_Transmit( netchan, msg );
+	return Netchan_Transmit( netchan, msg, NET_SEND_UNRELIABLE );
 }
 
 /*
@@ -1153,7 +1153,7 @@ void TV_Downstream_MasterHeartbeat( void )
 			if( master->steam )
 			{
 				uint8_t steamHeartbeat = 'q';
-				NET_SendPacket( socket, &steamHeartbeat, sizeof( steamHeartbeat ), &master->address );
+				NET_SendPacket( socket, &steamHeartbeat, sizeof( steamHeartbeat ), &master->address, NET_SEND_UNRELIABLE );
 			}
 			else
 			{
@@ -1185,7 +1185,7 @@ void TV_Downstream_MasterSendQuit( void )
 		{
 			socket_t *socket = ( master->address.type == NA_IP6 ? &tvs.socket_udp6 : &tvs.socket_udp );
 			Com_Printf( "Sending quit to %s\n", NET_AddressToString( &master->address ) );
-			NET_SendPacket( socket, ( const uint8_t * )quitMessage, sizeof( quitMessage ), &master->address );
+			NET_SendPacket( socket, ( const uint8_t * )quitMessage, sizeof( quitMessage ), &master->address, NET_SEND_UNRELIABLE );
 		}
 	}
 }

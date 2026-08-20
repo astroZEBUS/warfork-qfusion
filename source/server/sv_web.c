@@ -423,11 +423,16 @@ static bool SV_Web_FindGameClientBySession( const char *session, int clientNum )
 }
 
 /*
-* SV_Web_FindGameClientByAddress
+* SV_Web_AllowGameClientAddress
 *
 * Performs lookup for game client in trie by network address. Terribly inefficient.
+*
+* A client connected over the Steam relay has a SteamID for an address, so its HTTP
+* connection can never be matched here. As long as one such client is connected we let
+* unknown addresses through - every request still has to carry the session id of a
+* connected client to get anything but a 403 out of us.
 */
-static bool SV_Web_FindGameClientByAddress( const netadr_t *netadr )
+static bool SV_Web_AllowGameClientAddress( const netadr_t *netadr )
 {
 	unsigned int i;
 	struct trie_dump_s *dump;
@@ -440,7 +445,7 @@ static bool SV_Web_FindGameClientByAddress( const netadr_t *netadr )
 	valid_address = false;
 	for( i = 0; i < dump->size; i++ ) {
 		http_game_client_t *const a = (http_game_client_t *) dump->key_value_vector[i].value;
-		if( NET_CompareBaseAddress( netadr, &a->remoteAddress ) ) {
+		if( a->remoteAddress.type == NA_SDR || NET_CompareBaseAddress( netadr, &a->remoteAddress ) ) {
 			valid_address = true;
 			break;
 		}
@@ -1427,7 +1432,7 @@ static void SV_Web_Listen( socket_t *socket )
 		if( !NET_IsLocalAddress( &newaddress ) && !is_upstream )
 		{
 			// only accept connections from connected clients
-			block = SV_Web_FindGameClientByAddress( &newaddress ) == false;
+			block = SV_Web_AllowGameClientAddress( &newaddress ) == false;
 			if( !block ) {
 				block = SV_Web_ConnectionLimitReached( &newaddress );
 			}

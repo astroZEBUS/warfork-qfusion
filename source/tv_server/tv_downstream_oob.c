@@ -743,7 +743,7 @@ bool TV_Downstream_SteamServerQuery( const char *s, const socket_t *socket, cons
 			tv_public->integer ? 0 : 1,
 			APP_VERSION_MAJOR, APP_VERSION_MINOR,
 			basedir );
-		NET_SendPacket( socket, ( const uint8_t * )msg, strlen( msg ), address );
+		NET_SendPacket( socket, ( const uint8_t * )msg, strlen( msg ), address, NET_SEND_UNRELIABLE );
 
 		return true;
 	}

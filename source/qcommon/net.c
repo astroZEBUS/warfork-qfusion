@@ -73,74 +73,126 @@ static bool	net_initialized = false;
 static int numIP;
 static uint8_t localIP[MAX_IPS][4];
 
-#define STEAM_SLOT_MAX 256
+// per-socket receive staging: starts at SDR_RING_INITIAL and doubles until a datagram fits, up
+// to SDR_RING_MAX. The shim hands us up to SDR_MAX_REQUESTED_PACKETS per connection per dispatch
+// while a reader takes one packet at a time, so a backlog is normal.
+#define SDR_RING_INITIAL	16384
+#define SDR_RING_MAX		( 1 << 20 )
 
-struct steam_pkt_recieved_s {
-	struct steam_pkt_recieved_s *next;
-	uint32_t handle;           // HSteamNetConnection (peer connection)
-	uint64_t steam_handle;     // peer SteamID
-	size_t   recvSize;
-	uint8_t  buffered[];
+// every staged datagram is framed so message boundaries survive the shared buffer
+struct sdr_frame_hdr_s {
+	uint64_t steamid;	// peer SteamID
+	uint32_t size;		// payload bytes following this header
 };
 
-struct steam_slot_s {
-	uint32_t handle;
-	struct steam_pkt_recieved_s *head;
-	struct steam_pkt_recieved_s *tail;
-};
+// bytes staged and not yet handed to a reader
+#define SDR_RING_USED( rb ) ( (rb) ? ( (rb)->end - (rb)->start ) : 0 )
 
-static struct steam_slot_s steam_slots[STEAM_SLOT_MAX];
-static size_t              num_steam_slots = 0;
+// how long NET_Sleep may sleep with an SDR socket in the set but no way to select() on the shim
+// pipe. the child polls its own connections on a 1ms loop, so there is nothing to gain below it.
+#define NET_SDR_POLL_MSEC	2
 
-static void __SDR_DisconnectMessages( void *self, struct steam_rpc_pkt_s *pkt )
+/*
+* NET_SDR_Reserve
+*
+* Makes room for need more bytes at the write offset. Frames are written and read linearly, so
+* the cheap move is to reclaim the prefix the reader has already consumed; only when that is not
+* enough does the buffer double. Returns false at the cap.
+*/
+static bool NET_SDR_Reserve( struct socket_ring_buffer_s **prb, size_t need )
 {
-	struct p2p_disconnect_req_s *rpc = &pkt->p2p_disconnect;
-	for( size_t i = 0; i < num_steam_slots; i++ ) {
-		if( steam_slots[i].handle != rpc->handle)
-			continue;
-		struct steam_pkt_recieved_s *p = steam_slots[i].head;
-		while( p ) {
-			struct steam_pkt_recieved_s *next = p->next;
-			free( p );
-			p = next;
-		}
-		steam_slots[i] = steam_slots[--num_steam_slots];
-		return;
-	}	
+	struct socket_ring_buffer_s *rb = *prb;
+	size_t used = SDR_RING_USED( rb );
+	size_t reserve;
+	struct socket_ring_buffer_s *next;
+
+	if( rb && rb->end + need <= rb->reserve )
+		return true;
+
+	// slide the unread bytes back to the front before asking for more memory
+	if( rb && used + need <= rb->reserve ) {
+		if( used )
+			memmove( rb->buffer, rb->buffer + rb->start, used );
+		rb->start = 0;
+		rb->end = used;
+		return true;
+	}
+
+	if( used + need > SDR_RING_MAX )
+		return false;
+
+	reserve = rb ? rb->reserve : SDR_RING_INITIAL;
+	while( reserve < used + need )
+		reserve *= 2;
+	if( reserve > SDR_RING_MAX )
+		reserve = SDR_RING_MAX;
+
+	next = malloc( sizeof( struct socket_ring_buffer_s ) + reserve );
+	if( !next )
+		return false;
+	next->reserve = reserve;
+	next->start = 0;
+	next->end = used;
+	if( used )
+		memcpy( next->buffer, rb->buffer + rb->start, used );
+
+	free( rb );
+	*prb = next;
+	return true;
 }
 
-static void __SDR_OnRecvMessages( void *self, struct steam_evt_pkt_s *pkt )
+/*
+* NET_SDR_StagePacket
+*
+* Frames every datagram carried by a shim receive event into the socket's receive buffer, so
+* NET_GetPacket can hand them back one at a time with their boundaries intact.
+*/
+void NET_SDR_StagePacket( socket_t *socket, const struct recv_messages_evt_s *evt )
 {
-	struct recv_messages_evt_s *evt = &pkt->recv_messages;
-	struct steam_slot_s *slot = NULL; //__SDR_GetOrCreateSlot( evt->handle );
-	for( size_t i = 0; i < num_steam_slots; i++ ) {
-		if( steam_slots[i].handle == evt->handle ) {
-			slot = &steam_slots[i];
+	size_t offset = 0;
+	int count = evt->count;
+
+	assert( socket && socket->type == SOCKET_SDR );
+
+	// messageinfo[] is fixed size but the count crossed the shim pipe, so it is input
+	if( count > SDR_MAX_REQUESTED_PACKETS )
+		count = SDR_MAX_REQUESTED_PACKETS;
+
+	for( int i = 0; i < count; i++ ) {
+		size_t isz = (size_t)evt->messageinfo[i].count;
+		struct socket_ring_buffer_s *rb;
+		struct sdr_frame_hdr_s hdr;
+
+		// the per message counts are input in the same way the packet count is, and they are
+		// what walks offset through the payload. stop at the extent the event declares rather
+		// than trusting them to add up to it
+		if( evt->messageinfo[i].count < 0 || offset + isz > evt->total ) {
+			Com_DPrintf( "SDR: truncated receive event, dropped %d of %d packets\n",
+				count - i, count );
 			break;
 		}
-	}
-	if( slot == NULL ) {
-		if( num_steam_slots >= STEAM_SLOT_MAX )
-			return;
-		slot = &steam_slots[num_steam_slots++];
-		slot->handle = evt->handle;
-		slot->head = NULL;
-		slot->tail = NULL;
-	}
-	size_t offset = 0;
-	for( int i = 0; i < evt->count; i++ ) {
-		size_t isz = (size_t)evt->messageinfo[i].count;
-		struct steam_pkt_recieved_s *p = malloc( sizeof( struct steam_pkt_recieved_s ) + isz );
-		p->next = NULL;
-		p->handle = evt->handle;
-		p->steam_handle = evt->steamID;
-		p->recvSize = isz;
-		memcpy( p->buffered, evt->buffer + offset, isz );
-		if( slot->tail )
-			slot->tail->next = p;
-		else
-			slot->head = p;
-		slot->tail = p;
+
+		// offset always advances, even for a dropped message, or the rest of the
+		// concatenated payload buffer would be misread
+		if( isz > MAX_MSGLEN ) {
+			Com_DPrintf( "SDR: dropped oversized packet (%zu bytes)\n", isz );
+			offset += isz;
+			continue;
+		}
+		if( !NET_SDR_Reserve( &socket->buffer, sizeof( hdr ) + isz ) ) {
+			Com_DPrintf( "SDR: receive buffer full, dropped packet (%zu bytes)\n", isz );
+			offset += isz;
+			continue;
+		}
+
+		hdr.steamid = evt->steamID;
+		hdr.size = (uint32_t)isz;
+
+		// read back after the reserve: it can reallocate or slide the contents
+		rb = socket->buffer;
+		memcpy( rb->buffer + rb->end, &hdr, sizeof( hdr ) );
+		memcpy( rb->buffer + rb->end + sizeof( hdr ), evt->buffer + offset, isz );
+		rb->end += sizeof( hdr ) + isz;
 		offset += isz;
 	}
 }
@@ -417,31 +469,26 @@ static int NET_SDR_GetPacket( const socket_t *socket, netadr_t *address, msg_t *
 
 	STEAMSHIM_dispatch();
 
-	struct steam_slot_s *slot = NULL;
-	for( size_t i = 0; i < num_steam_slots; i++ ) {
-		if( steam_slots[i].handle == socket->steam_handle ) {
-			slot = &steam_slots[i];
-			break;
-		}
-	}
-	if( !slot || !slot->head )
+	// read after the dispatch above, never before: staging can reallocate the buffer
+	struct socket_ring_buffer_s *rb = socket->buffer;
+	struct sdr_frame_hdr_s hdr;
+
+	if( SDR_RING_USED( rb ) < sizeof( hdr ) )
 		return 0;
+	memcpy( &hdr, rb->buffer + rb->start, sizeof( hdr ) );
 
-	struct steam_pkt_recieved_s *p = slot->head;
-	slot->head = p->next;
-	if( !slot->head )
-		slot->tail = NULL;
-
-	size_t sz = p->recvSize;
+	size_t sz = hdr.size;
 	if( sz > message->maxsize )
 		sz = message->maxsize;
-	memcpy( message->data, p->buffered, sz );
+	memcpy( message->data, rb->buffer + rb->start + sizeof( hdr ), sz );
+	// consume the whole frame even when the payload was clamped
+	rb->start += sizeof( hdr ) + hdr.size;
+
 	message->cursize   = sz;
 	message->readcount = 0;
 	NET_InitAddress( address, NA_SDR );
-	address->address.steamid = p->steam_handle;
+	address->address.steamid = hdr.steamid;
 
-	free( p );
 	return 1;
 }
 
@@ -490,23 +537,54 @@ static int NET_UDP_GetPacket( const socket_t *socket, netadr_t *address, msg_t *
 	return 1;
 }
 
-static bool NET_SDR_SendPacket( const socket_t *socket, const void *data, size_t length, const netadr_t *address ) {
-  assert(socket && socket->open && socket->type==SOCKET_SDR );
-	
-	struct send_message_req_s *req = (struct send_message_req_s*)malloc(sizeof(struct send_message_req_s) + length);
-	if(socket->server) {
-		req->cmd = RPC_SRV_P2P_SEND_MESSAGE;
-	} else {
-		req->cmd = RPC_P2P_SEND_MESSAGE;
+static bool NET_SDR_SendPacket( const socket_t *socket, const void *data, size_t length, const netadr_t *address, int flags ) {
+	assert( socket && socket->type == SOCKET_SDR );
+
+	// a send can race a connection teardown, so these are checked rather than asserted. without
+	// a failure return here Netchan_DropAllFragments is unreachable on SDR and a dead shim looks
+	// like a silently lossless link
+	if( !socket->open || !socket->steam_handle ) {
+		NET_SetErrorString( "Connection closed" );
+		return false;
+	}
+	// two ceilings apply and the pipe one is the lower: the child reads a parent packet into a
+	// fixed STEAM_PACKED_RESERVE_SIZE buffer and bails out of its command loop entirely - not
+	// just skipping the packet - for anything larger, so an oversized send would take the shim
+	// down with it. its own SDR_MAX_MESSAGE_SIZE check is an assert, compiled out in release
+	if( length > SDR_MAX_SENDABLE_MESSAGE_SIZE ) {
+		NET_SetErrorString( "Oversized packet" );
+		return false;
 	}
 
-	req->messageReliability = 0|4|1; // 0 = unreliable, 4 = no nagle, 1 = no delay
+	struct send_message_evt_s *req = (struct send_message_evt_s*)malloc(sizeof(struct send_message_evt_s) + length);
+	if( !req ) {
+		NET_SetErrorString( "Out of memory" );
+		return false;
+	}
+
+	// one way by design: the child performs the send and answers with nothing, so this is an
+	// event rather than an RPC - see EVT_P2P_SEND_MESSAGE in steamshim_types.h
+	if(socket->server) {
+		req->cmd = EVT_SRV_P2P_SEND_MESSAGE;
+	} else {
+		req->cmd = EVT_P2P_SEND_MESSAGE;
+	}
+
+	// k_nSteamNetworkingSend_Unreliable = 0, _NoNagle = 1, _NoDelay = 4, _Reliable = 8.
+	// note NoDelay must stay off on the reliable path: it makes steam discard a message it
+	// can't hand off immediately, which defeats the point of asking for reliability
+	req->messageReliability = ( flags & NET_SEND_RELIABLE ) ? ( 8 | 1 ) : ( 0 | 4 | 1 );
 	req->count = length;
 	req->handle = socket->steam_handle;
 	memcpy(req->buffer, data, length);
-	STEAMSHIM_sendRPC(req, sizeof (struct send_message_req_s) + length, NULL, NULL, NULL);
+	int sent = STEAMSHIM_sendEVT(req, sizeof (struct send_message_evt_s) + length);
 	free(req);
-	return 1;
+
+	if( sent != 0 ) {
+		NET_SetErrorString( "Steam shim pipe write failed" );
+		return false;
+	}
+	return true;
 }
 
 /*
@@ -634,16 +712,22 @@ static void NET_UDP_CloseSocket( socket_t *socket )
 }
 
 static void NET_SDR_CloseSocket( socket_t *socket ) {
-	if( !socket->open )
-		return;
+	// the ring is freed unconditionally: several paths (sv_oob.c, the ClosedByPeer transition in
+	// cl_main.c) clear open on their own before we get here
+	if( socket->open ) {
+		struct p2p_disconnect_req_s req;
+		req.cmd = socket->server ? RPC_SRV_P2P_DISCONNECT : RPC_P2P_DISCONNECT;
+		req.handle = socket->steam_handle;
+		STEAMSHIM_sendRPC( &req, sizeof req, NULL, NULL, NULL );
+	}
 
-	struct p2p_disconnect_req_s req;
-	req.cmd = socket->server ? RPC_SRV_P2P_DISCONNECT : RPC_P2P_DISCONNECT;
-	req.handle = socket->handle;
-	STEAMSHIM_sendRPC( &req, sizeof req, NULL, __SDR_DisconnectMessages, NULL );
-
+	// this is the only place a receive ring is destroyed. it is idempotent - a second close
+	// sees a NULL buffer and a zeroed handle - which SV_DropClient and the CS_ZOMBIE sweep
+	// both rely on, since they can close the same client socket
+	free( socket->buffer );
+	socket->buffer = NULL;
 	socket->open = false;
-	socket->handle = 0;
+	socket->steam_handle = 0;
 }
 
 //=============================================================================
@@ -1203,7 +1287,7 @@ int NET_Get( const socket_t *socket, netadr_t *address, void *data, size_t lengt
 /*
 * NET_SendPacket
 */
-bool NET_SendPacket( const socket_t *socket, const void *data, size_t length, const netadr_t *address )
+bool NET_SendPacket( const socket_t *socket, const void *data, size_t length, const netadr_t *address, int flags )
 {
 	assert( socket->open );
 
@@ -1213,6 +1297,7 @@ bool NET_SendPacket( const socket_t *socket, const void *data, size_t length, co
 	if( address->type == NA_NOTRANSMIT )
 		return true;
 
+	// only SDR can act on the flags; the rest of the transports have a fixed delivery model
 	switch( socket->type )
 	{
 	case SOCKET_LOOPBACK:
@@ -1221,7 +1306,7 @@ bool NET_SendPacket( const socket_t *socket, const void *data, size_t length, co
 	case SOCKET_UDP:
 		return NET_UDP_SendPacket( socket, data, length, address );
 	case SOCKET_SDR:
-		return NET_SDR_SendPacket( socket, data, length, address );
+		return NET_SDR_SendPacket( socket, data, length, address, flags );
 #ifdef TCP_SUPPORT
 	case SOCKET_TCP:
 		return NET_TCP_SendPacket( socket, data, length );
@@ -1919,7 +2004,9 @@ bool NET_OpenSocket( socket_t *socket, socket_type_t type, const netadr_t *addre
 */
 void NET_CloseSocket( socket_t *socket )
 {
-	if( !socket->open )
+	// an SDR socket still owns a receive ring after the peer tears the connection down, and those
+	// transitions clear open on their own, so it has to fall through to its close handler anyway
+	if( !socket->open && socket->type != SOCKET_SDR )
 		return;
 
 	switch( socket->type )
@@ -1979,6 +2066,9 @@ void NET_Sleep( int msec, socket_t *sockets[] )
 	struct timeval timeout;
 	fd_set fdset;
 	int i;
+	int fdmax = 0;
+	bool sdr = false;
+	int shimFd = -1;
 
 	TracyCZoneN( ctx, "NET_Sleep", 1 );
 
@@ -1991,29 +2081,58 @@ void NET_Sleep( int msec, socket_t *sockets[] )
 
 	for( i = 0; sockets[i]; i++ )
 	{
-		assert( sockets[i]->open );
-
 		switch( sockets[i]->type )
 		{
 		case SOCKET_UDP:
 #ifdef TCP_SUPPORT
 		case SOCKET_TCP:
 #endif
+			assert( sockets[i]->open );
 			assert( sockets[i]->handle > 0 );
 			FD_SET( (unsigned)sockets[i]->handle, &fdset ); // network socket
+			fdmax = max( (int)sockets[i]->handle, fdmax );
 			break;
 		case SOCKET_SDR:
+			// no assert on open: an SDR socket is buffering during the handshake, before
+			// the accept RPC has come back and set open
+			sdr = true;
 			break;
 
 		default:
 			Com_Printf( "Warning: Invalid socket type on Sys_NET_Sleep\n" );
+			TracyCZoneEnd( ctx );
 			return;
+		}
+	}
+
+	if( sdr ) {
+		// anything already staged means the caller has work waiting and should not sleep at all
+		for( i = 0; sockets[i]; i++ ) {
+			if( sockets[i]->type != SOCKET_SDR )
+				continue;
+			if( SDR_RING_USED( sockets[i]->buffer ) >= sizeof( struct sdr_frame_hdr_s ) ) {
+				TracyCZoneEnd( ctx );
+				return;
+			}
+		}
+
+		shimFd = STEAMSHIM_pollFd();
+		if( shimFd >= 0 ) {
+			FD_SET( (unsigned)shimFd, &fdset );
+			fdmax = max( shimFd, fdmax );
+		} else if( msec > NET_SDR_POLL_MSEC ) {
+			msec = NET_SDR_POLL_MSEC;
 		}
 	}
 
 	timeout.tv_sec = msec / 1000;
 	timeout.tv_usec = ( msec % 1000 ) * 1000;
-	select( FD_SETSIZE, &fdset, NULL, NULL, &timeout );
+	select( fdmax + 1, &fdset, NULL, NULL, &timeout );
+
+	// decode whatever woke us, so the caller's following NET_GetPacket finds it staged
+	if( sdr && ( shimFd < 0 || FD_ISSET( shimFd, &fdset ) ) )
+		STEAMSHIM_dispatch();
+
 	TracyCZoneEnd( ctx );
 }
 
@@ -2153,10 +2272,6 @@ void NET_Init( void )
 
 	GetLocalAddress();
 
-	num_steam_slots = 0;
-	STEAMSHIM_subscribeEvent( EVT_P2P_RECV_MESSAGES, NULL, __SDR_OnRecvMessages );
-	STEAMSHIM_subscribeEvent( EVT_SRV_P2P_RECV_MESSAGES, NULL, __SDR_OnRecvMessages );
-
 	net_initialized = true;
 }
 
@@ -2172,17 +2287,8 @@ void NET_Shutdown( void )
 
 	Sys_NET_Shutdown();
 
-	STEAMSHIM_unsubscribeEvent( EVT_P2P_RECV_MESSAGES, __SDR_OnRecvMessages );
-	STEAMSHIM_unsubscribeEvent( EVT_SRV_P2P_RECV_MESSAGES, __SDR_OnRecvMessages );
-	for( size_t i = 0; i < num_steam_slots; i++ ) {
-		struct steam_pkt_recieved_s *p = steam_slots[i].head;
-		while( p ) {
-			struct steam_pkt_recieved_s *next = p->next;
-			free( p );
-			p = next;
-		}
-	}
-	num_steam_slots = 0;
+	// receive rings belong to whoever declared the socket_t; they are freed by NET_CloseSocket,
+	// which CL_Shutdown and SV_ShutdownGame reach for every SDR socket they own
 
 	net_initialized = false;
 }

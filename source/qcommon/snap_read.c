@@ -31,23 +31,24 @@ UTILITY FUNCTIONS
 =========================================================================
 */
 
-const char * const svc_strings[256] =
+const char * const svc_strings[] =
 {
-	"svc_bad",
-	"svc_nop",
-	"svc_servercmd",
-	"svc_serverdata",
-	"svc_spawnbaseline",
-	"svc_download",
-	"svc_playerinfo",
-	"svc_packetentities",
-	"svc_gamecommands",
-	"svc_match",
-	"svc_clcack",
-	"svc_servercs", // reliable command as unreliable for demos
-	"svc_frame",
-	"svc_demoinfo",
-	"svc_extension"
+	[svc_bad] = "svc_bad",
+	[svc_nop] = "svc_nop",
+	[svc_servercmd] = "svc_servercmd",
+	[svc_serverdata] = "svc_serverdata",
+	[svc_spawnbaseline] = "svc_spawnbaseline",
+	[svc_download] = "svc_download",
+	[svc_playerinfo] = "svc_playerinfo",
+	[svc_packetentities] = "svc_packetentities",
+	[svc_gamecommands] = "svc_gamecommands",
+	[svc_match] = "svc_match",
+	[svc_clcack] = "svc_clcack",
+	[svc_servercs] = "svc_servercs", // reliable command as unreliable for demos
+	[svc_frame] = "svc_frame",
+	[svc_demoinfo] = "svc_demoinfo",
+	[svc_voice] = "svc_voice",
+	[svc_extension] = "svc_extension"
 };
 
 void _SHOWNET( msg_t *msg, const char *s, int shownet )

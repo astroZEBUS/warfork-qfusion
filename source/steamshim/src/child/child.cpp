@@ -136,6 +136,7 @@ static void _drainSocket( steam_cmd_s evtCmd, ISteamNetworkingSockets *sockets, 
 	evt->steamID = steamid;
 	evt->handle  = h;
 	evt->count   = n;
+	evt->total   = (uint32_t)total;
 	size_t offset = 0;
 	for( int i = 0; i < n; i++ ) {
 		const size_t sz = msgs[i]->GetSize();
@@ -168,10 +169,30 @@ static void processEVT( steam_evt_pkt_s *req, size_t size )
 		case EVT_HEART_BEAT: {
 			time( &time_since_last_pump );
 			break;
-			default:
-				assert( 0 ); // unhandled packet
-				break;
 		}
+		// the two send cases deliberately write nothing back, which is why they are events and
+		// not RPCs. both pipes are blocking, so a parent busy pushing a file transfer is not
+		// draining replies, and once the reply pipe fills the child stops reading commands and
+		// the two deadlock
+		case EVT_SRV_P2P_SEND_MESSAGE: {
+			assert( (size_t)req->send_message.count <= SDR_MAX_SENDABLE_MESSAGE_SIZE );
+			EResult sendResult = SteamGameServerNetworkingSockets()->SendMessageToConnection( req->send_message.handle, req->send_message.buffer, req->send_message.count, req->send_message.messageReliability, nullptr );
+			// the send is asynchronous from the parent's point of view, so this is the only
+			// place a relay level drop is visible at all
+			if( sendResult != k_EResultOK )
+				dbgprintf( "SendMessageToConnection (server, %d bytes) failed: EResult %d\n", req->send_message.count, (int)sendResult );
+			break;
+		}
+		case EVT_P2P_SEND_MESSAGE: {
+			assert( (size_t)req->send_message.count <= SDR_MAX_SENDABLE_MESSAGE_SIZE );
+			EResult sendResult = SteamNetworkingSockets()->SendMessageToConnection( req->send_message.handle, req->send_message.buffer, req->send_message.count, req->send_message.messageReliability, nullptr );
+			if( sendResult != k_EResultOK )
+				dbgprintf( "SendMessageToConnection (client, %d bytes) failed: EResult %d\n", req->send_message.count, (int)sendResult );
+			break;
+		}
+		default:
+			assert( 0 ); // unhandled packet
+			break;
 	}
 }
 
@@ -362,22 +383,6 @@ static void processRPC( steam_rpc_pkt_s *req, size_t size )
 		}
 		case RPC_P2P_DISCONNECT: {
 			SteamNetworkingSockets()->CloseConnection( req->p2p_disconnect.handle, 0, nullptr, false );
-			struct steam_rpc_shim_common_s recv;
-			prepared_rpc_packet( &req->common, &recv );
-			write_packet( GPipeWrite, &recv, sizeof( steam_rpc_shim_common_s ) );
-			break;
-		}
-		case RPC_SRV_P2P_SEND_MESSAGE: {
-			assert( req->send_message.count < SDR_MAX_MESSAGE_SIZE );
-			SteamGameServerNetworkingSockets()->SendMessageToConnection( req->send_message.handle, req->send_message.buffer, req->send_message.count, req->send_message.messageReliability, nullptr );
-			struct steam_rpc_shim_common_s recv;
-			prepared_rpc_packet( &req->common, &recv );
-			write_packet( GPipeWrite, &recv, sizeof( steam_rpc_shim_common_s ) );
-			break;
-		}
-		case RPC_P2P_SEND_MESSAGE: {
-			assert( req->send_message.count < SDR_MAX_MESSAGE_SIZE );
-			SteamNetworkingSockets()->SendMessageToConnection( req->send_message.handle, req->send_message.buffer, req->send_message.count, req->send_message.messageReliability, nullptr );
 			struct steam_rpc_shim_common_s recv;
 			prepared_rpc_packet( &req->common, &recv );
 			write_packet( GPipeWrite, &recv, sizeof( steam_rpc_shim_common_s ) );
@@ -672,6 +677,14 @@ static void processCommands()
 
 		assert( sizeof( struct steam_packet_buf ) == STEAM_PACKED_RESERVE_SIZE );
 
+		// these have to run on every iteration, not just when the parent has written to us.
+		// a peer that is only receiving (a client pulling down a map, say) sends nothing, so
+		// gating the drain on inbound pipe traffic leaves its packets sitting in the steam
+		// queue until the parent's 1Hz heartbeat happens to wake us
+		processSteamServerDispatch();
+		processSteamDispatch();
+		drainAllConnections();
+
 		if( !pipeReady( GPipeRead ) ) {
 			std::this_thread::sleep_for( std::chrono::microseconds( 1000 ) );
 			continue;
@@ -685,9 +698,6 @@ static void processCommands()
 			continue;
 		}
 
-		processSteamServerDispatch();
-		processSteamDispatch();
-		drainAllConnections();
 	continue_processing:
 
 		if( packet.size > STEAM_PACKED_RESERVE_SIZE - sizeof( uint32_t ) ) {
