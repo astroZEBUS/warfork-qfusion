@@ -574,7 +574,7 @@ void RB_AddDynamicMesh( struct FrameState_s *cmd,
 	// void *vboMemory = rsh.nri.coreI.MapBuffer( vboReq.buffer, vboReq.elementOffset * vboReq.elementStride, vboReq.numElements * vboReq.elementStride );
 	R_WriteMeshToVertexBuffer( draw->layout, vattribs, mesh, ( (uint8_t *)vboMemory ) );
 	if( trifan ) {
-		R_BuildTrifanElements( vertexStartIdx, numElems, (elem_t *)( eleMemory ) );
+		R_BuildTrifanElements( vertexStartIdx, numVerts, (elem_t *)( eleMemory ) );
 	} else {
 		if( primitive == RI_TOPOLOGY_TRIANGLE_LIST ) {
 			R_CopyOffsetTriangles( mesh->elems, numElems, vertexStartIdx, (elem_t *)( (uint8_t *)eleMemory ) );

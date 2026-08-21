@@ -20,8 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cg_local.h"
 
 #define MAX_DECALS			512
-#define MAX_DECAL_VERTS		64
-#define MAX_DECAL_FRAGMENTS	64
+#define MAX_DECAL_VERTS		1024
+#define MAX_DECAL_FRAGMENTS	384
+#define MAX_DECAL_POLY_VERTS 16
 
 typedef struct cdecal_s
 {
@@ -42,10 +43,10 @@ static cdecal_t	cg_decals[MAX_DECALS];
 static cdecal_t	cg_decals_headnode, *cg_free_decals;
 
 static poly_t cg_decal_polys[MAX_DECALS];
-static vec4_t cg_decal_verts[MAX_DECALS][MAX_DECAL_VERTS];
-static vec4_t cg_decal_norms[MAX_DECALS][MAX_DECAL_VERTS];
-static vec2_t cg_decal_stcoords[MAX_DECALS][MAX_DECAL_VERTS];
-static byte_vec4_t cg_decal_colors[MAX_DECALS][MAX_DECAL_VERTS];
+static vec4_t cg_decal_verts[MAX_DECALS][MAX_DECAL_POLY_VERTS];
+static vec4_t cg_decal_norms[MAX_DECALS][MAX_DECAL_POLY_VERTS];
+static vec2_t cg_decal_stcoords[MAX_DECALS][MAX_DECAL_POLY_VERTS];
+static byte_vec4_t cg_decal_colors[MAX_DECALS][MAX_DECAL_POLY_VERTS];
 
 /*
 * CG_ClearDecals
@@ -181,7 +182,7 @@ int CG_SpawnDecal( const vec3_t origin, const vec3_t dir, float orient, float ra
 
 	for( i = 0, fr = fragments; i < numfragments; i++, fr++ )
 	{
-		if( fr->numverts > MAX_DECAL_VERTS )
+		if( fr->numverts > MAX_DECAL_POLY_VERTS )
 			return numfragments;
 		else if( fr->numverts <= 0 )
 			continue;
@@ -211,7 +212,16 @@ int CG_SpawnDecal( const vec3_t origin, const vec3_t dir, float orient, float ra
 			VectorSubtract( poly->verts[j], origin, v );
 			poly->stcoords[j][0] = DotProduct( v, axis[1] ) + 0.5f;
 			poly->stcoords[j][1] = DotProduct( v, axis[2] ) + 0.5f;
-			*( int * )poly->colors[j] = *( int * )color;
+
+			float depth = fabs( DotProduct( v, axis[0] ) );
+			float t = depth / 38.0f;
+			if( t > 1.0f ) t = 1.0f;
+			float depthScale = 1.0f - (t * t * t);
+
+			poly->colors[j][0] = ( uint8_t )( color[0] * depthScale );
+			poly->colors[j][1] = ( uint8_t )( color[1] * depthScale );
+			poly->colors[j][2] = ( uint8_t )( color[2] * depthScale );
+			poly->colors[j][3] = ( uint8_t )( color[3] * depthScale );
 		}
 	}
 
@@ -227,7 +237,6 @@ void CG_AddDecals( void )
 	float fade;
 	cdecal_t *dl, *next, *hnode;
 	poly_t *poly;
-	byte_vec4_t color;
 
 	// add decals in first-spawed - first-drawn order
 	hnode = &cg_decals_headnode;
@@ -250,21 +259,25 @@ void CG_AddDecals( void )
 
 			if( dl->fadealpha )
 			{
-				color[0] = ( uint8_t )( dl->color[0] );
-				color[1] = ( uint8_t )( dl->color[1] );
-				color[2] = ( uint8_t )( dl->color[2] );
-				color[3] = ( uint8_t )( dl->color[3] * fade );
+				uint8_t fadedAlpha = ( uint8_t )( dl->color[3] * fade );
+				for( i = 0; i < poly->numverts; i++ )
+				{
+					if ( fadedAlpha < poly->colors[i][3] ) poly->colors[i][3] = fadedAlpha;
+				}
 			}
 			else
 			{
-				color[0] = ( uint8_t )( dl->color[0] * fade );
-				color[1] = ( uint8_t )( dl->color[1] * fade );
-				color[2] = ( uint8_t )( dl->color[2] * fade );
-				color[3] = ( uint8_t )( dl->color[3] );
-			}
+				uint8_t r = ( uint8_t )( dl->color[0] * fade );
+				uint8_t g = ( uint8_t )( dl->color[1] * fade );
+				uint8_t b = ( uint8_t )( dl->color[2] * fade );
 
-			for( i = 0; i < poly->numverts; i++ )
-				*( int * )poly->colors[i] = *( int * )color;
+				for( i = 0; i < poly->numverts; i++ )
+				{
+					if ( r < poly->colors[i][0] ) poly->colors[i][0] = r;
+					if ( g < poly->colors[i][1] ) poly->colors[i][1] = g;
+					if ( b < poly->colors[i][2] ) poly->colors[i][2] = b;
+				}
+			}
 		}
 
 		RF_AddPolyToScene( poly );

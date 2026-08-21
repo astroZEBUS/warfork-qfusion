@@ -854,7 +854,7 @@ void RB_AddDynamicMesh( const entity_t *entity, const shader_t *shader,
 
 	destElems = dynamicStreamElems[-streamId - 1] + stream->drawElements.firstElem + stream->drawElements.numElems;
 	if( trifan ) {
-		R_BuildTrifanElements( destVertOffset, numElems, destElems );
+		R_BuildTrifanElements( destVertOffset, numVerts, destElems );
 	}
 	else {
 		if( primitive == GL_TRIANGLES ) {

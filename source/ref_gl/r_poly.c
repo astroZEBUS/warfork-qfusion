@@ -311,8 +311,8 @@ static bool R_PlanarSurfClipFragment( msurface_t *surf, vec3_t normal )
 		VectorCopy( verts[elem[1]], poly[1] );
 		VectorCopy( verts[elem[2]], poly[2] );
 
-		// early cull TRISOUP meshes by their bounds. Planar surfaces don't need this.
-		if( surf->facetype == FACETYPE_TRISURF )
+		// early cull TRISOUP and PATCH meshes by their bounds. Planar surfaces don't need this.
+		if( surf->facetype == FACETYPE_TRISURF || surf->facetype == FACETYPE_PATCH )
 		{
 			vec3_t triMins, triMaxs;
 
@@ -340,70 +340,21 @@ static bool R_PlanarSurfClipFragment( msurface_t *surf, vec3_t normal )
 			CrossProduct( dir1, dir2, snorm );
 			VectorNormalize( snorm );
 
-			// we multiply 0.5 by length of snorm to avoid normalizing
-			if( DotProduct( normal, snorm ) < 0.5 )
-				continue; // greater than 60 degrees
+			if( mesh->normalsArray )
+			{
+				if( DotProduct( snorm, mesh->normalsArray[elem[0]] ) < 0.0f )
+					VectorNegate( snorm, snorm );
+			}
+
+			if( DotProduct( normal, snorm ) < 0.087f )
+				continue; // backface (greater than ~85 degrees)
 		}
 
 		if( R_WindingClipFragment( poly, 3, surf, snorm ) )
-			return true;
-	}
-
-	return false;
-}
-
-/*
-* R_PatchSurfClipFragment
-*/
-static bool R_PatchSurfClipFragment( msurface_t *surf, vec3_t normal )
-{
-	int i, j;
-	mesh_t *mesh;
-	elem_t	*elem;
-	vec4_t *verts;
-	vec3_t poly[3];
-	vec3_t dir1, dir2, snorm;
-
-	mesh = surf->mesh;
-	elem = mesh->elems;
-	verts = mesh->xyzArray;
-
-	// clip each triangle individually
-	for( i = j = 0; i < mesh->numElems; i += 6, elem += 6, j = 0 )
-	{
-		VectorCopy( verts[elem[1]], poly[1] );
-
-		if( !j )
 		{
-			VectorCopy( verts[elem[0]], poly[0] );
-			VectorCopy( verts[elem[2]], poly[2] );
+			if( planar )
+				return true;
 		}
-		else
-		{
-tri2:
-			j++;
-			VectorCopy( poly[2], poly[0] );
-			VectorCopy( verts[elem[5]], poly[2] );
-		}
-
-		// calculate two mostly perpendicular edge directions
-		VectorSubtract( poly[0], poly[1], dir1 );
-		VectorSubtract( poly[2], poly[1], dir2 );
-
-		// we have two edge directions, we can calculate a third vector from
-		// them, which is the direction of the triangle normal
-		CrossProduct( dir1, dir2, snorm );
-		VectorNormalize( snorm );
-
-		// we multiply 0.5 by length of snorm to avoid normalizing
-		if( DotProduct( normal, snorm ) < 0.5 )
-			continue; // greater than 60 degrees
-
-		if( R_WindingClipFragment( poly, 3, surf, snorm ) )
-			return true;
-
-		if( !j )
-			goto tri2;
 	}
 
 	return false;
@@ -455,15 +406,7 @@ static void R_RecursiveFragmentNode( void )
 				if( !BoundsAndSphereIntersect( surf->mins, surf->maxs, fragmentOrigin, fragmentRadius ) )
 					continue;
 
-				if( surf->facetype == FACETYPE_PATCH )
-					inside = R_PatchSurfClipFragment( surf, fragmentNormal );
-				else
-					inside = R_PlanarSurfClipFragment( surf, fragmentNormal );
-
-				// if there some fragments that are inside a surface, that doesn't mean that
-				// there are no fragments that are OUTSIDE, so the check below is disabled
-				//if( inside )
-				//	return;
+				inside = R_PlanarSurfClipFragment( surf, fragmentNormal );
 				(void)inside; // hush compiler warning
 			} while( *mark );
 
