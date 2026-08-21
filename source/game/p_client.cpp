@@ -612,6 +612,8 @@ void G_ClientRespawn( edict_t *self, bool ghost )
 		client->ps.pmove.stats[PM_STAT_FEATURES] = static_cast<unsigned short>(PMFEAT_DEFAULT);
 		if( !g_allow_bunny->integer )
 			client->ps.pmove.stats[PM_STAT_FEATURES] &= ~( PMFEAT_AIRCONTROL|PMFEAT_FWDBUNNY );
+		if( AI_GetType( self->ai ) == AI_ISBOT )
+			client->ps.pmove.stats[PM_STAT_FEATURES] |= PMFEAT_BOTCLIP;
 	}
 
 	ClientUserinfoChanged( self, client->userinfo );

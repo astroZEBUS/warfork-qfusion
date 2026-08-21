@@ -280,7 +280,23 @@ void BOT_DMclass_SpecialMove( edict_t *self, vec3_t lookdir, vec3_t pathdir, use
 	if( bunnyhop )
 	{
 		if( self->groundentity )
-			ucmd->upmove = 1;
+		{
+			vec3_t hvel, hlook;
+			float hspeed;
+
+			VectorCopy( self->velocity, hvel );
+			hvel[2] = 0;
+			hspeed = VectorLengthFast( hvel );
+			if( hspeed >= self->r.client->ps.pmove.stats[PM_STAT_MAXSPEED] )
+			{
+				VectorScale( hvel, 1.0f / hspeed, hvel );
+				VectorCopy( lookdir, hlook );
+				hlook[2] = 0;
+				VectorNormalize( hlook );
+				if( DotProduct( hvel, hlook ) >= 0.707f ) // cos(45°)
+					ucmd->upmove = 1;
+			}
+		}
 
 #if 0
 		// fake strafe-jumping acceleration
