@@ -836,7 +836,7 @@ endif
 
 if deluxe
 	{
-		material textures/boqu/light2
+		material textures/boqu/light2 textures/flatnorm - textures/boqu/light2_glow.png 
 	}
 endif
 }

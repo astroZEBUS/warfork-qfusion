@@ -62,6 +62,7 @@ textures/blx_wtest3/glow2
 	cull back
 	surfaceparm trans
 	surfaceparm nonsolid
+	surfaceparm nomarks
 	qer_trans 0.5
 	{	
 		map textures/blx/blx_glow2.png
@@ -77,6 +78,7 @@ textures/blx_wtest3/blx_wt3_glow
 	polygonOffset 
 	surfaceparm trans
 	surfaceparm nonsolid
+	surfaceparm nomarks
 	qer_trans 0.5
 	{	
 		map textures/blx_wtest3/blx_wt3_glow.png
