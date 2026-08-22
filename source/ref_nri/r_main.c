@@ -1396,7 +1396,7 @@ const char *R_WriteSpeedsMessage(char *out, size_t size)
 					}
 					else if (debugSurface->mesh) {
 						numVerts = debugSurface->mesh->numVerts;
-						numTris = debugSurface->mesh->numElems;
+						numTris = debugSurface->mesh->numElems / 3;
 					}
 
 					if (numVerts) {
