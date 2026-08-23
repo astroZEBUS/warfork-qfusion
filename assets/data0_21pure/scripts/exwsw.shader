@@ -72,10 +72,10 @@ textures/exwsw/matte_eX_surf_metaldarkgrey
 
 textures/exwsw/eX_mtl_bigplate_04b_daze
 {
-	qer_editorimage textures/exwsw/eX_mtl_bigplate_04b_daze.png
+	qer_editorimage textures/exwsw/eX_mtl_bigplate_04b
 
 	{
-		material textures/exwsw/eX_mtl_bigplate_04b_daze.png textures/exwsw/eX_mtl_bigplate_04b_norm.png textures/exwsw/eX_mtl_bigplate_04b_daze_gloss.png
+		material textures/exwsw/eX_mtl_bigplate_04b.png textures/exwsw/eX_mtl_bigplate_04b_norm.png textures/exwsw/eX_mtl_bigplate_04b_gloss.png
 	}
 }
 
