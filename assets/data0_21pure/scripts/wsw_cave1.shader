@@ -1,6 +1,6 @@
 textures/wsw_cave1/water_flow
 {
-	qer_editorimage textures/wsw_cave1/water_flow_dvdu.png
+	qer_editorimage textures/wsw_cave1/water_flow.png
 	surfaceparm trans
 	surfaceparm nonsolid
 	surfaceparm nomarks
