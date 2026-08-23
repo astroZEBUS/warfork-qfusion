@@ -1165,6 +1165,28 @@ static void R_SkeletalTransformNormalsAndSVecs( int numverts, const unsigned int
 //=======================================================================
 
 /*
+* R_BindSkeletalMeshVBO
+*
+* Configures the vertex layout and binds the vertex/index buffers of a skeletal
+* mesh VBO. Unlike GL, RB_BindVBO alone does not bind anything on this backend:
+* RB_DrawShadedElements_2 draws from cmd->pipeline and the buffers bound here.
+*/
+static void R_BindSkeletalMeshVBO( struct FrameState_s *cmd, mesh_vbo_t *vbo )
+{
+	cmd->pipeline.numStreams = 1;
+	cmd->pipeline.streams[0] = ( struct frame_cmd_vertex_stream_s ) {
+		.stride = vbo->vertexSize,
+		.bindingSlot = 0
+	};
+	cmd->pipeline.numAttribs = 0;
+	cmd->pipeline.topology = RI_TOPOLOGY_TRIANGLE_LIST;
+	R_FillNriVertexAttrib( vbo, cmd->pipeline.attribs, &cmd->pipeline.numAttribs );
+
+	FR_CmdSetVertexBuffer( cmd, 0, &vbo->vertexBuffer, 0 );
+	FR_CmdSetIndexBuffer( cmd, &vbo->indexBuffer, 0, RI_INDEX_TYPE_16 );
+}
+
+/*
 * R_DrawSkeletalSurf
 */
 void R_DrawSkeletalSurf(struct FrameState_s* cmd, const entity_t *e, const shader_t *shader, const mfog_t *fog, const portalSurface_t *portalSurface, unsigned int shadowBits, drawSurfaceSkeletal_t *drawSurf )
@@ -1229,7 +1251,7 @@ void R_DrawSkeletalSurf(struct FrameState_s* cmd, const entity_t *e, const shade
 
 	if( bp == oldbp && !framenum && skmesh->vbo != NULL ) {
 		// fastpath: render static frame 0 as is
-		RB_BindVBO( skmesh->vbo->index, RI_TOPOLOGY_TRIANGLE_LIST );
+		R_BindSkeletalMeshVBO( cmd, skmesh->vbo );
 
 		RB_DrawShadedElements_2(cmd, 0, skmesh->numverts, 0, skmesh->numtris * 3, 
 			0, skmesh->numverts, 0, skmesh->numtris * 3 );
@@ -1333,17 +1355,7 @@ void R_DrawSkeletalSurf(struct FrameState_s* cmd, const entity_t *e, const shade
 	}
 
 	RB_SetBonesData( skmodel->numbones, bonePoseRelativeDQ, skmesh->maxWeights );
-	cmd->pipeline.numStreams = 1;
-	cmd->pipeline.streams[0] = (struct frame_cmd_vertex_stream_s ) {
-		.stride = skmesh->vbo->vertexSize,
-		.bindingSlot = 0
-	};
-	cmd->pipeline.numAttribs = 0;
-	cmd->pipeline.topology = RI_TOPOLOGY_TRIANGLE_LIST;
-	R_FillNriVertexAttrib(skmesh->vbo, cmd->pipeline.attribs, &cmd->pipeline.numAttribs);
-
-	FR_CmdSetVertexBuffer(cmd, 0, &skmesh->vbo->vertexBuffer, 0);
-	FR_CmdSetIndexBuffer(cmd, &skmesh->vbo->indexBuffer, 0, RI_INDEX_TYPE_16);
+	R_BindSkeletalMeshVBO( cmd, skmesh->vbo );
 
 	RB_DrawShadedElements_2(cmd, 0, skmesh->numverts, 0, skmesh->numtris * 3, 
 		0, skmesh->numverts, 0, skmesh->numtris * 3);

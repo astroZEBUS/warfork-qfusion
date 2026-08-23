@@ -1057,8 +1057,9 @@ model_t *Mod_ForName( const char *name, bool crash )
 
 	Q_strncpyz( shortname, name, sizeof( shortname ) );
 	COM_StripExtension( shortname );
-	extension = &name[strlen( shortname )+1];
-
+	const size_t shortlen = strlen( shortname );
+	extension = shortlen < strlen( name ) ? &name[shortlen + 1] : "";
+	
 	mod = Mod_FindSlot( name );
 	if( mod->type == mod_bad ) {
 		return NULL;
