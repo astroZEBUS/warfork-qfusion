@@ -1391,8 +1391,9 @@ const char *R_WriteSpeedsMessage(char *out, size_t size)
 					Q_strncatz(out, "\n", size);
 
 					if (r_speeds->integer == 5 && debugSurface->drawSurf->vbo) {
-						numVerts = debugSurface->drawSurf->vbo->numVerts;
-						numTris = debugSurface->drawSurf->vbo->numElems / 3;
+						drawSurfaceBSP_t *drawSurf = (drawSurfaceBSP_t *)debugSurface->drawSurf;
+						numVerts = drawSurf->numVerts;
+						numTris = drawSurf->numElems / 3;
 					}
 					else if (debugSurface->mesh) {
 						numVerts = debugSurface->mesh->numVerts;

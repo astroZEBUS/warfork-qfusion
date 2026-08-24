@@ -1508,8 +1508,9 @@ const char *R_WriteSpeedsMessage(char *out, size_t size)
 					Q_strncatz(out, "\n", size);
 
 					if (r_speeds->integer == 5 && debugSurface->drawSurf->vbo) {
-						numVerts = debugSurface->drawSurf->vbo->numVerts;
-						numTris = debugSurface->drawSurf->vbo->numElems / 3;
+						drawSurfaceBSP_t *drawSurf = (drawSurfaceBSP_t *)debugSurface->drawSurf;
+						numVerts = drawSurf->numVerts;
+						numTris = drawSurf->numElems / 3;
 					}
 					else if (debugSurface->mesh) {
 						numVerts = debugSurface->mesh->numVerts;
@@ -1519,6 +1520,14 @@ const char *R_WriteSpeedsMessage(char *out, size_t size)
 					if (numVerts) {
 						Q_snprintfz(out + strlen(out), size - strlen(out),
 							"verts: %5i tris: %5i", numVerts, numTris);
+					}
+
+					if (r_speeds->integer == 5 && debugSurface->drawSurf->vbo) {
+						Q_strncatz(out, "\n", size);
+						Q_snprintfz(out + strlen(out), size - strlen(out),
+							"vbo verts: %5i vbo tris: %5i",
+							debugSurface->drawSurf->vbo->numVerts,
+							debugSurface->drawSurf->vbo->numElems / 3);
 					}
 
 					Q_strncatz(out, "\n", size);
