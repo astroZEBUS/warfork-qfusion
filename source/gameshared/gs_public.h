@@ -675,7 +675,7 @@ float GS_FrameForTime( int *frame, unsigned int curTime, unsigned int startTimeS
 #define	PMFEAT_BOTCLIP			( 1<<13 )
 
 #define PMFEAT_ALL				( 0xFFFF )
-#define PMFEAT_DEFAULT			( PMFEAT_ALL & ~PMFEAT_GHOSTMOVE )
+#define PMFEAT_DEFAULT			( PMFEAT_ALL & ~( PMFEAT_GHOSTMOVE|PMFEAT_BOTCLIP ) )
 
 enum
 {

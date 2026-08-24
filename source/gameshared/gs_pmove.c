@@ -1847,10 +1847,10 @@ void Pmove( pmove_t *pmove )
 			pm->playerState->pmove.pm_flags &= ~PMF_NO_PREDICTION;
 		if( pm->playerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_GHOSTMOVE )
 			pm->contentmask = MASK_DEADSOLID;
-		else if( pm->playerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_BOTCLIP )
-			pm->contentmask = MASK_MONSTERSOLID;
 		else
 			pm->contentmask = MASK_PLAYERSOLID;
+		if( pm->playerState->pmove.stats[PM_STAT_FEATURES] & PMFEAT_BOTCLIP )
+			pm->contentmask |= CONTENTS_MONSTERCLIP;
 		break;
 	}
 
