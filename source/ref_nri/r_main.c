@@ -1405,6 +1405,14 @@ const char *R_WriteSpeedsMessage(char *out, size_t size)
 							"verts: %5i tris: %5i", numVerts, numTris);
 					}
 
+					if (r_speeds->integer == 5 && debugSurface->drawSurf->vbo) {
+						Q_strncatz(out, "\n", size);
+						Q_snprintfz(out + strlen(out), size - strlen(out),
+							"vbo verts: %5i vbo tris: %5i",
+							debugSurface->drawSurf->vbo->numVerts,
+							debugSurface->drawSurf->vbo->numElems / 3);
+					}
+
 					Q_strncatz(out, "\n", size);
 
 					if (debugSurface->fog && debugSurface->fog->shader
