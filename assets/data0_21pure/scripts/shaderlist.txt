@@ -38,7 +38,7 @@ plastic
 plastic_vertex
 wood
 wood_vertex
-bricks_vertex
+bricks
 grates
 grates_vertex
 tiles

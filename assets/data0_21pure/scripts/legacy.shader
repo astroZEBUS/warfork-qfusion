@@ -8,6 +8,129 @@
 //
 //==============================================
 
+
+
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
+//	DEPRECATED 2026
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
+
+
+textures/bricks_vertex/vertex_redbricks_base_01
+{	
+	qer_editorimage textures/bricks/redbricks_base_01
+	surfaceparm nolightmap
+
+if ! deluxe
+
+	{
+		map textures/bricks/redbricks_base_01
+		rgbgen vertex
+	}
+endif
+
+if deluxe
+	{
+		rgbgen lightingDiffuse
+		material textures/bricks/redbricks_base_01
+	}
+endif
+}
+
+
+textures/refly_bricks/bricksdark1org
+{	
+	qer_editorimage textures/bricks/bricks_05_black
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	{
+		material textures/bricks/bricks_05_black textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+textures/refly_bricks/bricksdark1
+{	
+	qer_editorimage textures/bricks/bricks_05_bricksdark1
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	glossExponent 100
+	glossIntensity 0.2
+	{
+		material textures/bricks/bricks_05_bricksdark1 textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+textures/refly_bricks/bricksdark1org
+{	
+	qer_editorimage textures/bricks/bricks_05_bricksdark1
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	glossExponent 100
+	glossIntensity 0.2
+	{
+		material textures/bricks/bricks_05_bricksdark1 textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+textures/refly_bricks/Bricks_Refly_DarkGrey1
+{	
+	qer_editorimage textures/bricks/bricks_05_darkgrey1
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	glossExponent 100
+	glossIntensity 0.2
+	{
+		material textures/bricks/bricks_05_darkgrey1 textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+textures/refly_bricks/bricks1
+{	
+	qer_editorimage textures/bricks/bricks_05_bricks1
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	glossExponent 100
+	glossIntensity 0.4
+	{
+		material textures/bricks/bricks_05_bricks1 textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+textures/refly_bricks/bricks2
+{	
+	qer_editorimage textures/bricks/bricks_05_bricks2
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	{
+		material textures/bricks/bricks_05_bricks2 textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+textures/refly_bricks/bricks4
+{	
+	qer_editorimage textures/bricks/bricks_05_bricks4
+	q3map_chamfer_convexwidth 1.75
+	q3map_chamfer_concavewidth 1
+	glossExponent 100
+	glossIntensity 0.4
+	{
+		material textures/bricks/bricks_05_bricks4 textures/bricks/bricks_05_norm textures/bricks/bricks_05_gloss
+	}
+}
+
+
+
+
+
+
+
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+//   MOVED BEFORE 0.21
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+
 textures/ecel/ecel_met02
 {
 	qer_editorimage textures/cleansurface/pantone7536c.png
