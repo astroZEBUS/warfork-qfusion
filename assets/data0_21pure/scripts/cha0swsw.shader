@@ -1,79 +1,18 @@
-textures/cha0s_ws/trim19_black
+
+
+textures/cha0s_ws/cement_2_yellow_flat
 {
-	qer_editorimage textures/cha0s_ws/trim19_black.png
+	qer_editorimage textures/metal/cement_2_yellow_flat
 
 	{
-		material
+		material textures/cha0s_ws/cement_2_yellow_flat $blankBumpImage
 	}
 }
 
-textures/cha0s_ws/cement_1_clean
-{
-	qer_editorimage textures/cha0s_ws/cement_1_clean.png
-
-	{
-		material
-	}
-}
-
-textures/cha0s_ws/cement_1_grimy
-{
-	qer_editorimage textures/cha0s_ws/cement_1_grimy.png
-
-	{
-		material textures/cha0s_ws/cement_1_grimy.png textures/cha0s_ws/cement_1_stripes_norm.png
-	}
-}
-
-textures/cha0s_ws/cement_1_gunky
-{
-	qer_editorimage textures/cha0s_ws/cement_1_gunky.png
-
-	{
-		material textures/cha0s_ws/cement_1_gunky.png textures/cha0s_ws/cement_1_stripes_norm.png
-	}
-}
-
-textures/cha0s_ws/cement_3_stripes
-{
-	qer_editorimage textures/cha0s_ws/cement_3_stripes.png
-
-	{
-		material textures/cha0s_ws/cement_3_stripes.png textures/cha0s_ws/cement_3_norm.png
-	}
-}
-
-textures/cha0s_ws/concrete-3-yellow
-{
-	qer_editorimage textures/facility/concrete3.png
-
-	{
-		material textures/facility/concrete3.png
-	}
-}
-
-textures/cha0s_ws/concrete-4
-{
-	qer_editorimage textures/facility/concrete4.png
-
-	{
-		material textures/facility/concrete4.png textures/facility/concrete4_norm.png
-	}
-}
 
 //=======================================
 // LIGHTS ETC
 //=======================================
-
-
-
-
-
-
-
-
-
-
 
 textures/cha0s_ws/glass
 {
@@ -93,20 +32,6 @@ textures/cha0s_ws/glass
 		blendfunc blend
 		tcmod scale .5 .5
 	}
-}
-
-
-
-
-
-textures/cha0s_ws/scarletfog
-{
-	qer_editorimage textures/sfx/fog_grey.png
-	surfaceparm fog
-	surfaceparm nolightmap
-	surfaceparm nonsolid
-	surfaceparm trans
-	fogparms ( .4 0 .05 ) 384
 }
 
 

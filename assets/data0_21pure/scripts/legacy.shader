@@ -16,7 +16,139 @@
 ///////////////////////////////////////////////////
 ///////////////////////////////////////////////////
 
+// cha0s_wsw
+textures/cha0s_ws/trim19_black
+{
+	surfaceparm nolightmap
+	qer_editorimage textures/cha0s_ws/trim19_black.png
 
+	{
+		map textures/cha0s_ws/trim19_black.png
+	}
+}
+
+textures/cha0s_ws/base_column
+{
+	{
+		material $whiteimage $blankbumpimage
+		rgbgen const 0.117647 0.196078 0.156863
+	}
+}
+
+textures/cha0s_ws/base_floor
+{
+	{
+		material $whiteimage $blankbumpimage
+		rgbgen const 0.117647 0.196078 0.156863
+	}
+}
+
+textures/cha0s_ws/base_wall
+{
+	{
+		material $whiteimage $blankbumpimage
+		rgbgen const 0.117647 0.196078 0.156863
+	}
+}
+
+textures/cha0s_ws/base_grey
+{
+	qer_editorimage textures/concrete/concreteclean
+
+	{
+		material textures/concrete/concreteclean textures/concrete/concreteclean_norm
+	}
+}
+
+textures/cha0s_ws/ceiling_grey
+{
+	qer_editorimage textures/concrete/concreteclean
+
+	{
+		material textures/concrete/concreteclean textures/concrete/concreteclean_norm
+	}
+}
+
+textures/cha0s_ws/cement_1_clean
+{
+	qer_editorimage textures/concrete/concreteclean
+
+	{
+		material textures/concrete/concreteclean textures/concrete/concreteclean_norm
+	}
+}
+
+textures/cha0s_ws/cement_1_grimy
+{
+	qer_editorimage textures/metal/metalrust_iron6
+
+	{
+		material textures/metal/metalrust_iron6 textures/factory/factory_wall_norm
+	}
+}
+
+textures/cha0s_ws/cement_1_gunky
+{
+	qer_editorimage textures/metal/metalrust_iron6
+
+	{
+		material textures/metal/metalrust_iron6 textures/factory/factory_wall_norm
+	}
+}
+
+textures/cha0s_ws/cement_2
+{
+	qer_editorimage textures/concrete/concretecold01
+	q3map_chamfer_concavewidth 0.5
+
+	{
+		material textures/concrete/concretecold01 textures/concrete/concretecold01_norm
+		tcMod scale 3 3
+	}
+}
+
+textures/cha0s_ws/cement_2_height
+{
+	qer_editorimage textures/concrete/concretecold01
+	q3map_chamfer_concavewidth 0.5
+
+	{
+		material textures/concrete/concretecold01 textures/concrete/concretecold01_norm
+		tcMod scale 3 3
+	}
+}
+
+textures/cha0s_ws/cement_2_yellow
+{
+	qer_editorimage textures/metal/metalrust_iron6
+
+	{
+		material textures/cha0s_ws/cement_2_yellow_flat textures/factory/factory_wall_norm
+	}
+}
+
+textures/cha0s_ws/cement_3_stripes
+{
+	qer_editorimage textures/concrete/concreteclean
+	
+	{
+		material textures/concrete/concreteclean textures/factory/factory_wall_norm
+	}
+}
+
+
+textures/cha0s_ws/concrete-4
+{
+	qer_editorimage textures/facility/concrete4.png
+
+	{
+		material textures/facility/concrete4.png textures/facility/concrete4_norm.png
+	}
+}
+
+
+
+// refly bricks
 textures/bricks_vertex/vertex_redbricks_base_01
 {	
 	qer_editorimage textures/bricks/redbricks_base_01
